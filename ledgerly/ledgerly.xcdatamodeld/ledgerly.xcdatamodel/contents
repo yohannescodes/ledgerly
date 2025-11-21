@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
+    <entity name="AppSettings" representedClassName="AppSettings" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" defaultValueString="app_settings_singleton" usesScalarValueType="NO"/>
+        <attribute name="baseCurrencyCode" optional="NO" attributeType="String" defaultValueString="USD" usesScalarValueType="NO"/>
+        <attribute name="exchangeMode" optional="NO" attributeType="String" defaultValueString="official" usesScalarValueType="NO"/>
+        <attribute name="cloudSyncEnabled" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="hasCompletedOnboarding" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastUpdated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="priceRefreshIntervalMinutes" optional="NO" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="identifier"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <elements>
+        <element name="AppSettings" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
+    </elements>
+</model>
