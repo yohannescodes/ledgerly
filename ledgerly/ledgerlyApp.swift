@@ -7,6 +7,7 @@
 
 import CoreData
 import SwiftUI
+import Combine
 
 @main
 struct ledgerlyApp: App {
@@ -14,6 +15,8 @@ struct ledgerlyApp: App {
     @StateObject private var appSettingsStore: AppSettingsStore
     @StateObject private var walletsStore: WalletsStore
     @StateObject private var transactionsStore: TransactionsStore
+    @StateObject private var investmentsStore: InvestmentsStore
+    @StateObject private var netWorthStore: NetWorthStore
 
     init() {
         let persistence = PersistenceController.shared
@@ -21,6 +24,8 @@ struct ledgerlyApp: App {
         _appSettingsStore = StateObject(wrappedValue: AppSettingsStore(persistence: persistence))
         _walletsStore = StateObject(wrappedValue: WalletsStore(persistence: persistence))
         _transactionsStore = StateObject(wrappedValue: TransactionsStore(persistence: persistence))
+        _investmentsStore = StateObject(wrappedValue: InvestmentsStore(persistence: persistence))
+        _netWorthStore = StateObject(wrappedValue: NetWorthStore(persistence: persistence))
     }
 
     var body: some Scene {
@@ -30,6 +35,8 @@ struct ledgerlyApp: App {
                 .environmentObject(appSettingsStore)
                 .environmentObject(walletsStore)
                 .environmentObject(transactionsStore)
+                .environmentObject(investmentsStore)
+                .environmentObject(netWorthStore)
         }
     }
 }

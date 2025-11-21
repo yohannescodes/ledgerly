@@ -25,6 +25,83 @@
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Transaction" inverseName="category" inverseEntity="Transaction"/>
     </entity>
+    <entity name="HoldingLot" representedClassName="HoldingLot" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="quantity" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="costPerUnit" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="fee" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="acquiredDate" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <relationship name="account" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="InvestmentAccount" inverseName="holdings" inverseEntity="InvestmentAccount"/>
+        <relationship name="asset" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="InvestmentAsset" inverseName="holdings" inverseEntity="InvestmentAsset"/>
+    </entity>
+    <entity name="InvestmentAccount" representedClassName="InvestmentAccount" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="institution" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="accountType" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="includeInNetWorth" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="holdings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HoldingLot" inverseName="account" inverseEntity="HoldingLot"/>
+    </entity>
+    <entity name="InvestmentAsset" representedClassName="InvestmentAsset" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="symbol" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="assetType" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="exchange" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="category" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <relationship name="holdings" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="HoldingLot" inverseName="asset" inverseEntity="HoldingLot"/>
+        <relationship name="snapshots" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PriceSnapshot" inverseName="asset" inverseEntity="PriceSnapshot"/>
+    </entity>
+    <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="ManualAsset" representedClassName="ManualAsset" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="type" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="value" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="valuationDate" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="volatility" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="includeInCore" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="includeInTangible" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="ManualLiability" representedClassName="ManualLiability" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="type" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="balance" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="interestRate" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="dueDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="NetWorthSnapshot" representedClassName="NetWorthSnapshot" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="timestamp" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="totalAssets" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="totalLiabilities" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="coreNetWorth" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="tangibleNetWorth" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="volatileAssets" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="PriceSnapshot" representedClassName="PriceSnapshot" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="price" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="provider" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="timestamp" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isStale" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <relationship name="asset" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="InvestmentAsset" inverseName="snapshots" inverseEntity="InvestmentAsset"/>
+    </entity>
     <entity name="Transaction" representedClassName="Transaction" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="direction" optional="NO" attributeType="String" usesScalarValueType="NO"/>
@@ -59,14 +136,18 @@
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Transaction" inverseName="wallet" inverseEntity="Transaction"/>
         <relationship name="transferPeers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Transaction" inverseName="counterpartyWallet" inverseEntity="Transaction"/>
     </entity>
-    <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
-        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
     <elements>
         <element name="AppSettings" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="Category" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="HoldingLot" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="InvestmentAccount" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="InvestmentAsset" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
+        <element name="ManualAsset" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="ManualLiability" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="NetWorthSnapshot" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="PriceSnapshot" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="Transaction" positionX="-63" positionY="-18" width="128" height="194"/>
         <element name="Wallet" positionX="-63" positionY="-18" width="128" height="154"/>
-        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
     </elements>
 </model>

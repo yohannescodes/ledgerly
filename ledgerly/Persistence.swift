@@ -86,7 +86,10 @@ final class PersistenceController {
         let walletRequest: NSFetchRequest<Wallet> = Wallet.fetchRequest()
         walletRequest.fetchLimit = 1
         let walletCount = (try? context.count(for: walletRequest)) ?? 0
-        guard walletCount == 0 else { return }
+        guard walletCount == 0 else {
+            seedNetWorthSnapshotIfNeeded(in: context)
+            return
+        }
 
         let salaryWallet = Wallet.create(
             in: context,
@@ -141,6 +144,78 @@ final class PersistenceController {
             date: Date().addingTimeInterval(-3600 * 72),
             wallet: salaryWallet,
             category: freelance
+        )
+
+        let brokerage = InvestmentAccount.create(
+            in: context,
+            name: "Brokerage",
+            institution: "Ledgerly Demo",
+            accountType: "brokerage",
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD"
+        )
+
+        let appleAsset = InvestmentAsset.create(
+            in: context,
+            symbol: "AAPL",
+            assetType: "stock",
+            name: "Apple Inc.",
+            exchange: "NASDAQ",
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD"
+        )
+
+        _ = HoldingLot.create(
+            in: context,
+            quantity: Decimal(5),
+            costPerUnit: Decimal(150),
+            acquiredDate: Date().addingTimeInterval(-86400 * 30),
+            account: brokerage,
+            asset: appleAsset
+        )
+
+        _ = PriceSnapshot.record(
+            in: context,
+            asset: appleAsset,
+            price: Decimal(180),
+            currencyCode: appleAsset.currencyCode ?? "USD",
+            provider: "demo"
+        )
+
+        _ = ManualAsset.create(
+            in: context,
+            name: "Car",
+            type: "tangible",
+            value: 12000,
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD",
+            includeInCore: true,
+            includeInTangible: true,
+            volatility: false
+        )
+
+        _ = ManualLiability.create(
+            in: context,
+            name: "Student Loan",
+            type: "loan",
+            balance: 8000,
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD"
+        )
+
+        seedNetWorthSnapshotIfNeeded(in: context)
+    }
+
+    private func seedNetWorthSnapshotIfNeeded(in context: NSManagedObjectContext) {
+        let snapshotRequest: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
+        snapshotRequest.fetchLimit = 1
+        let count = (try? context.count(for: snapshotRequest)) ?? 0
+        guard count == 0 else { return }
+        let service = NetWorthService(persistence: self)
+        let totals = service.computeTotals()
+        _ = NetWorthSnapshot.create(
+            in: context,
+            totalAssets: totals.totalAssets,
+            totalLiabilities: totals.totalLiabilities,
+            coreNetWorth: totals.coreNetWorth,
+            tangibleNetWorth: totals.tangibleNetWorth,
+            volatileAssets: totals.volatileAssets
         )
     }
 }
