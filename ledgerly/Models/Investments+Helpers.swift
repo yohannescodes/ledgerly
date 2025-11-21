@@ -25,6 +25,13 @@ struct InvestmentAssetModel: Identifiable, Hashable {
     let name: String
     let exchange: String?
     let currencyCode: String
+    let sparklinePoints: [PricePoint]
+}
+
+struct PricePoint: Identifiable, Hashable {
+    let id = UUID()
+    let date: Date
+    let value: Decimal
 }
 
 struct HoldingLotModel: Identifiable, Hashable {
@@ -39,6 +46,16 @@ struct HoldingLotModel: Identifiable, Hashable {
     let costBasis: Decimal
     let unrealizedGain: Decimal
     let percentChange: Decimal?
+    let sales: [HoldingSaleModel]
+}
+
+struct HoldingSaleModel: Identifiable, Hashable {
+    let id: NSManagedObjectID
+    let identifier: String
+    let date: Date
+    let quantity: Decimal
+    let price: Decimal
+    let walletName: String?
 }
 
 struct PriceSnapshotModel: Identifiable, Hashable {
@@ -109,6 +126,12 @@ extension InvestmentAssetModel {
         name = managedObject.name ?? symbol
         exchange = managedObject.exchange
         currencyCode = managedObject.currencyCode ?? "USD"
+        if let snapshots = managedObject.snapshots as? Set<PriceSnapshot> {
+            let sorted = snapshots.sorted { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) }
+            sparklinePoints = sorted.suffix(7).map { PricePoint(date: $0.timestamp ?? Date(), value: $0.price as Decimal? ?? .zero) }
+        } else {
+            sparklinePoints = []
+        }
     }
 }
 
@@ -132,6 +155,9 @@ extension HoldingLotModel {
         }
         unrealizedGain = marketValue - costBasis
         percentChange = costBasis == .zero ? nil : ((unrealizedGain / costBasis) * 100)
+        sales = (managedObject.sales as? Set<HoldingSale> ?? [])
+            .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+            .map(HoldingSaleModel.init)
     }
 
     private static func latestSnapshot(for asset: InvestmentAsset) -> Decimal? {
@@ -173,6 +199,17 @@ extension ManualLiabilityModel {
         type = managedObject.type ?? "loan"
         balance = managedObject.balance as Decimal? ?? .zero
         currencyCode = managedObject.currencyCode ?? "USD"
+    }
+}
+
+extension HoldingSaleModel {
+    init(managedObject: HoldingSale) {
+        id = managedObject.objectID
+        identifier = managedObject.identifier ?? UUID().uuidString
+        date = managedObject.date ?? Date()
+        quantity = managedObject.quantity as Decimal? ?? .zero
+        price = managedObject.price as Decimal? ?? .zero
+        walletName = managedObject.walletName
     }
 }
 
@@ -255,6 +292,25 @@ extension HoldingLot {
         lot.asset = asset
         if let fee { lot.fee = NSDecimalNumber(decimal: fee) }
         return lot
+    }
+}
+
+extension HoldingSale {
+    static func record(
+        in context: NSManagedObjectContext,
+        lot: HoldingLot?,
+        quantity: Decimal,
+        price: Decimal,
+        walletName: String?
+    ) -> HoldingSale {
+        let sale = HoldingSale(context: context)
+        sale.identifier = UUID().uuidString
+        sale.date = Date()
+        sale.quantity = NSDecimalNumber(decimal: quantity)
+        sale.price = NSDecimalNumber(decimal: price)
+        sale.walletName = walletName
+        sale.lot = lot
+        return sale
     }
 }
 

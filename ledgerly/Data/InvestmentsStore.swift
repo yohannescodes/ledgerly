@@ -10,9 +10,9 @@ final class InvestmentsStore: ObservableObject {
     private let persistence: PersistenceController
     private let priceService: PriceService
 
-    init(persistence: PersistenceController) {
+    init(persistence: PersistenceController, priceService: PriceService? = nil) {
         self.persistence = persistence
-        self.priceService = PriceService(persistence: persistence)
+        self.priceService = priceService ?? PriceService(persistence: persistence)
         reload()
     }
 
@@ -41,7 +41,8 @@ final class InvestmentsStore: ObservableObject {
         assetType: String,
         quantity: Decimal,
         costPerUnit: Decimal,
-        acquiredDate: Date
+        acquiredDate: Date,
+        fundingWalletID: NSManagedObjectID? = nil
     ) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -62,6 +63,82 @@ final class InvestmentsStore: ObservableObject {
                 account: account,
                 asset: asset
             )
+
+            if let walletID = fundingWalletID,
+               let wallet = try? context.existingObject(with: walletID) as? Wallet {
+                let totalCost = quantity * costPerUnit
+                let updated = (wallet.currentBalance as Decimal? ?? .zero) - totalCost
+                wallet.currentBalance = NSDecimalNumber(decimal: updated)
+                wallet.updatedAt = Date()
+                Transaction.create(
+                    in: context,
+                    direction: "expense",
+                    amount: totalCost,
+                    currencyCode: wallet.baseCurrencyCode ?? "USD",
+                    convertedAmountBase: totalCost,
+                    date: Date(),
+                    wallet: wallet,
+                    category: nil
+                )
+            }
+
+            try? context.save()
+
+            Task { @MainActor in
+                self.reload()
+            }
+        }
+    }
+
+    func sellHolding(
+        lotID: NSManagedObjectID,
+        quantity: Decimal,
+        salePrice: Decimal,
+        destinationWalletID: NSManagedObjectID?
+    ) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let lot = try? context.existingObject(with: lotID) as? HoldingLot else { return }
+            let available = lot.quantity as Decimal? ?? .zero
+            guard quantity > 0, quantity <= available else { return }
+            let remainingQuantity = available - quantity
+            if remainingQuantity <= 0 {
+                context.delete(lot)
+            } else {
+                lot.quantity = NSDecimalNumber(decimal: remainingQuantity)
+            }
+
+            if let walletID = destinationWalletID,
+               let wallet = try? context.existingObject(with: walletID) as? Wallet {
+                let proceeds = quantity * salePrice
+                wallet.currentBalance = NSDecimalNumber(decimal: (wallet.currentBalance as Decimal? ?? .zero) + proceeds)
+                wallet.updatedAt = Date()
+                Transaction.create(
+                    in: context,
+                    direction: "income",
+                    amount: proceeds,
+                    currencyCode: wallet.baseCurrencyCode ?? "USD",
+                    convertedAmountBase: proceeds,
+                    date: Date(),
+                    wallet: wallet,
+                    category: nil
+                )
+                _ = HoldingSale.record(
+                    in: context,
+                    lot: lot,
+                    quantity: quantity,
+                    price: salePrice,
+                    walletName: wallet.name
+                )
+            } else {
+                _ = HoldingSale.record(
+                    in: context,
+                    lot: lot,
+                    quantity: quantity,
+                    price: salePrice,
+                    walletName: nil
+                )
+            }
 
             try? context.save()
 

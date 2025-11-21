@@ -2,6 +2,8 @@ import SwiftUI
 
 struct InvestmentsView: View {
     @EnvironmentObject private var investmentsStore: InvestmentsStore
+    @State private var isRefreshing = false
+    @State private var refreshError: String?
 
     var body: some View {
         List {
@@ -14,13 +16,20 @@ struct InvestmentsView: View {
         .navigationTitle("Investments")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: investmentsStore.refreshPrices) {
-                    Image(systemName: "arrow.clockwise.circle")
+                Button(action: refreshPrices) {
+                    if isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise.circle")
+                    }
                 }
             }
         }
-        .onAppear {
-            investmentsStore.refreshPrices()
+        .onAppear(perform: refreshPrices)
+        .alert("Price Refresh", isPresented: Binding(get: { refreshError != nil }, set: { if !$0 { refreshError = nil } })) {
+            Button("OK", role: .cancel) { refreshError = nil }
+        } message: {
+            Text(refreshError ?? "")
         }
     }
 
@@ -39,6 +48,14 @@ struct InvestmentsView: View {
         }
     }
 
+    private func refreshPrices() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        Task {
+            defer { isRefreshing = false }
+            investmentsStore.refreshPrices()
+        }
+    }
 }
 
 struct HoldingRow: View {

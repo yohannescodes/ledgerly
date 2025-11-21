@@ -21,10 +21,16 @@ struct ledgerlyApp: App {
     init() {
         let persistence = PersistenceController.shared
         self.persistenceController = persistence
+
+        let alphaKey = ProcessInfo.processInfo.environment["ALPHAVANTAGE_API_KEY"]
+        let alphaClient = alphaKey.map { AlphaVantageClient(apiKey: $0) }
+        let coinClient = CoinGeckoClient()
+        let priceService = PriceService(persistence: persistence, alphaClient: alphaClient, coinClient: coinClient)
+
         _appSettingsStore = StateObject(wrappedValue: AppSettingsStore(persistence: persistence))
         _walletsStore = StateObject(wrappedValue: WalletsStore(persistence: persistence))
         _transactionsStore = StateObject(wrappedValue: TransactionsStore(persistence: persistence))
-        _investmentsStore = StateObject(wrappedValue: InvestmentsStore(persistence: persistence))
+        _investmentsStore = StateObject(wrappedValue: InvestmentsStore(persistence: persistence, priceService: priceService))
         _netWorthStore = StateObject(wrappedValue: NetWorthStore(persistence: persistence))
     }
 

@@ -4,9 +4,13 @@ import Foundation
 /// Local-only price service used while network access is disabled. Generates deterministic prices per asset.
 final class PriceService {
     private let persistence: PersistenceController
+    private let alphaClient: MarketDataClient?
+    private let coinClient: MarketDataClient?
 
-    init(persistence: PersistenceController) {
+    init(persistence: PersistenceController, alphaClient: MarketDataClient? = nil, coinClient: MarketDataClient? = nil) {
         self.persistence = persistence
+        self.alphaClient = alphaClient
+        self.coinClient = coinClient
     }
 
     func refreshPricesIfNeeded() {
@@ -14,6 +18,8 @@ final class PriceService {
         context.perform {
             let request: NSFetchRequest<InvestmentAsset> = InvestmentAsset.fetchRequest()
             guard let assets = try? context.fetch(request) else { return }
+            let descriptors = assets.map { AssetDescriptor(symbol: $0.symbol ?? "", assetType: $0.assetType ?? "stock") }
+            Task { await self.fetchRemoteQuotes(for: descriptors) }
             for asset in assets {
                 guard self.shouldUpdate(asset: asset) else { continue }
                 let newPrice = self.pseudoPrice(for: asset)
@@ -68,5 +74,31 @@ final class PriceService {
             }
             try? context.save()
         }
+    }
+
+    private func fetchRemoteQuotes(for descriptors: [AssetDescriptor]) async {
+        var quotes: [MarketQuote] = []
+        let stockSymbols = descriptors.filter { $0.assetType != "crypto" }.map { $0.symbol }
+        let cryptoSymbols = descriptors.filter { $0.assetType == "crypto" }.map { $0.symbol }
+
+        if let alphaClient, !stockSymbols.isEmpty {
+            if let fetched = try? await alphaClient.fetchQuotes(for: Array(stockSymbols.prefix(5))) {
+                quotes.append(contentsOf: fetched)
+            }
+        }
+
+        if let coinClient, !cryptoSymbols.isEmpty {
+            if let fetched = try? await coinClient.fetchQuotes(for: cryptoSymbols) {
+                quotes.append(contentsOf: fetched)
+            }
+        }
+
+        guard !quotes.isEmpty else { return }
+        applyRemoteQuotes(quotes)
+    }
+
+    private struct AssetDescriptor {
+        let symbol: String
+        let assetType: String
     }
 }

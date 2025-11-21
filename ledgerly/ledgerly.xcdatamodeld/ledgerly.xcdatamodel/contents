@@ -34,6 +34,15 @@
         <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <relationship name="account" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="InvestmentAccount" inverseName="holdings" inverseEntity="InvestmentAccount"/>
         <relationship name="asset" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="InvestmentAsset" inverseName="holdings" inverseEntity="InvestmentAsset"/>
+        <relationship name="sales" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="HoldingSale" inverseName="lot" inverseEntity="HoldingSale"/>
+    </entity>
+    <entity name="HoldingSale" representedClassName="HoldingSale" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="date" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="quantity" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="price" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="walletName" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <relationship name="lot" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="HoldingLot" inverseName="sales" inverseEntity="HoldingLot"/>
     </entity>
     <entity name="InvestmentAccount" representedClassName="InvestmentAccount" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
@@ -140,6 +149,7 @@
         <element name="AppSettings" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="Category" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="HoldingLot" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="HoldingSale" positionX="-63" positionY="-18" width="128" height="134"/>
         <element name="InvestmentAccount" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="InvestmentAsset" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
