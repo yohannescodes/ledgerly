@@ -8,6 +8,8 @@ struct HomeOverviewView: View {
     var body: some View {
         VStack(spacing: 24) {
             NetWorthSummaryCard(snapshot: netWorthStore.latestSnapshot)
+            BudgetSummaryCard()
+            GoalsSummaryCard()
             NetWorthHistoryList(snapshots: snapshots)
             Text("More dashboard widgets coming in later phases.")
                 .foregroundStyle(.secondary)
@@ -93,6 +95,10 @@ private struct NetWorthHistoryList: View {
         return formatter.string(from: value as NSNumber) ?? "--"
     }
 }
+
+import SwiftUI
+
+import SwiftUI
 
 #Preview {
     HomeOverviewView()

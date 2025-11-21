@@ -244,7 +244,8 @@ final class PersistenceController {
             name: "Emergency Fund",
             target: 5000,
             currencyCode: wallet.baseCurrencyCode ?? "USD",
-            linkedWallet: wallet
+            linkedWallet: wallet,
+            linkedCategory: nil
         )
     }
 }

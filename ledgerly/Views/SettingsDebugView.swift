@@ -42,6 +42,10 @@ struct SettingsDebugView: View {
                 }
 
                 Toggle("iCloud Sync", isOn: cloudSyncBinding)
+                Toggle("Notifications", isOn: Binding(
+                    get: { appSettingsStore.snapshot.notificationsEnabled },
+                    set: { appSettingsStore.updateNotifications($0) }
+                ))
                 Text("Onboarding Completed: \(appSettingsStore.snapshot.hasCompletedOnboarding ? "Yes" : "No")")
                     .foregroundStyle(.secondary)
             }

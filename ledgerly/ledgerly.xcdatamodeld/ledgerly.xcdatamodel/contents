@@ -6,6 +6,7 @@
         <attribute name="exchangeMode" optional="NO" attributeType="String" defaultValueString="official" usesScalarValueType="NO"/>
         <attribute name="cloudSyncEnabled" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="hasCompletedOnboarding" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notificationsEnabled" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="lastUpdated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="priceRefreshIntervalMinutes" optional="NO" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
         <uniquenessConstraints>

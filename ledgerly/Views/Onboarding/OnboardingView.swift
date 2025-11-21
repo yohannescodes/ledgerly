@@ -385,7 +385,8 @@ private struct SummaryRow: View {
             exchangeMode: .official,
             cloudSyncEnabled: false,
             hasCompletedOnboarding: false,
-            priceRefreshIntervalMinutes: 30
+            priceRefreshIntervalMinutes: 30,
+            notificationsEnabled: true
         )
     )
     .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))

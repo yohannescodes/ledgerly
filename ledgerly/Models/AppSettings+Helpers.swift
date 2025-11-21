@@ -24,6 +24,7 @@ extension AppSettings {
         settings.exchangeMode = "official"
         settings.cloudSyncEnabled = false
         settings.hasCompletedOnboarding = false
+        settings.notificationsEnabled = true
         settings.priceRefreshIntervalMinutes = 30
         settings.lastUpdated = Date()
         return settings

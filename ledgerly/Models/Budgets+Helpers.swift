@@ -10,6 +10,7 @@ struct MonthlyBudgetModel: Identifiable, Hashable {
     let currencyCode: String
     let spentAmount: Decimal
     let categoryName: String
+    let categoryID: NSManagedObjectID?
 }
 
 struct SavingGoalModel: Identifiable, Hashable {
@@ -34,6 +35,7 @@ extension MonthlyBudgetModel {
         currencyCode = managedObject.currencyCode ?? "USD"
         spentAmount = spent
         self.categoryName = categoryName
+        self.categoryID = managedObject.category?.objectID
     }
 }
 
@@ -78,7 +80,8 @@ extension SavingGoal {
         name: String,
         target: Decimal,
         currencyCode: String,
-        linkedWallet: Wallet?
+        linkedWallet: Wallet?,
+        linkedCategory: Category?
     ) -> SavingGoal {
         let goal = SavingGoal(context: context)
         goal.identifier = UUID().uuidString
@@ -89,6 +92,7 @@ extension SavingGoal {
         goal.deadline = Calendar.current.date(byAdding: .month, value: 6, to: Date())
         goal.status = "active"
         goal.wallet = linkedWallet
+        goal.category = linkedCategory
         return goal
     }
 }

@@ -7,6 +7,7 @@
 
 import CoreData
 import SwiftUI
+import UserNotifications
 import Combine
 
 @main
@@ -36,6 +37,7 @@ struct ledgerlyApp: App {
         _netWorthStore = StateObject(wrappedValue: NetWorthStore(persistence: persistence))
         _budgetsStore = StateObject(wrappedValue: BudgetsStore(persistence: persistence))
         _goalsStore = StateObject(wrappedValue: GoalsStore(persistence: persistence))
+        requestNotificationAuthorization()
     }
 
     var body: some Scene {
@@ -51,4 +53,8 @@ struct ledgerlyApp: App {
                 .environmentObject(goalsStore)
         }
     }
+}
+
+private func requestNotificationAuthorization() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
 }

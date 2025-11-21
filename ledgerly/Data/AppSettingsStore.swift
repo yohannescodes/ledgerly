@@ -9,6 +9,7 @@ struct AppSettingsSnapshot: Equatable {
     let cloudSyncEnabled: Bool
     let hasCompletedOnboarding: Bool
     let priceRefreshIntervalMinutes: Int
+    let notificationsEnabled: Bool
 }
 
 enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
@@ -93,6 +94,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    func updateNotifications(_ enabled: Bool) {
+        performMutation { settings in
+            settings.notificationsEnabled = enabled
+        }
+    }
+
     private func performMutation(_ block: @escaping (AppSettings) -> Void) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -120,5 +127,6 @@ private extension AppSettingsSnapshot {
         cloudSyncEnabled = managedObject.cloudSyncEnabled
         hasCompletedOnboarding = managedObject.hasCompletedOnboarding
         priceRefreshIntervalMinutes = Int(managedObject.priceRefreshIntervalMinutes)
+        notificationsEnabled = managedObject.notificationsEnabled
     }
 }
