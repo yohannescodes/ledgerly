@@ -19,11 +19,7 @@ final class PersistenceController {
                 let settings = AppSettings.makeDefault(in: context)
                 settings.hasCompletedOnboarding = true
             }
-
-            for _ in 0..<3 {
-                let newItem = Item(context: context)
-                newItem.timestamp = Date().addingTimeInterval(Double.random(in: -86400...0))
-            }
+            controller.seedDemoIfNeeded(in: context)
         }
 
         do {
@@ -71,12 +67,12 @@ final class PersistenceController {
 
     private func seedDefaultsIfNeeded() {
         let context = container.viewContext
-        context.perform { [weak context] in
+        context.perform { [weak context, weak self] in
             guard let context else { return }
-            if AppSettings.fetchSingleton(in: context) != nil { return }
-
-            _ = AppSettings.makeDefault(in: context)
-
+            if AppSettings.fetchSingleton(in: context) == nil {
+                _ = AppSettings.makeDefault(in: context)
+            }
+            self?.seedDemoIfNeeded(in: context)
             do {
                 try context.save()
             } catch {
@@ -84,5 +80,67 @@ final class PersistenceController {
                 fatalError("Failed to seed defaults: \(nsError), \(nsError.userInfo)")
             }
         }
+    }
+
+    private func seedDemoIfNeeded(in context: NSManagedObjectContext) {
+        let walletRequest: NSFetchRequest<Wallet> = Wallet.fetchRequest()
+        walletRequest.fetchLimit = 1
+        let walletCount = (try? context.count(for: walletRequest)) ?? 0
+        guard walletCount == 0 else { return }
+
+        let salaryWallet = Wallet.create(
+            in: context,
+            name: "Salary Account",
+            walletType: "bank",
+            currencyCode: Locale.current.currency?.identifier ?? "USD",
+            iconName: "building.columns",
+            startingBalance: 5_000
+        )
+
+        let cashWallet = Wallet.create(
+            in: context,
+            name: "Cash",
+            walletType: "cash",
+            currencyCode: Locale.current.currency?.identifier ?? "USD",
+            iconName: "banknote",
+            startingBalance: 400
+        )
+
+        let groceries = Category.create(in: context, name: "Groceries", type: "expense", colorHex: "#FF9F0A", iconName: "cart")
+        let transport = Category.create(in: context, name: "Transport", type: "expense", colorHex: "#0A84FF", iconName: "car")
+        let freelance = Category.create(in: context, name: "Freelance", type: "income", colorHex: "#32D74B", iconName: "laptopcomputer")
+
+        _ = Transaction.create(
+            in: context,
+            direction: "expense",
+            amount: Decimal(120.45),
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD",
+            convertedAmountBase: Decimal(120.45),
+            date: Date().addingTimeInterval(-3600 * 12),
+            wallet: salaryWallet,
+            category: groceries
+        )
+
+        _ = Transaction.create(
+            in: context,
+            direction: "expense",
+            amount: Decimal(35.10),
+            currencyCode: cashWallet.baseCurrencyCode ?? "USD",
+            convertedAmountBase: Decimal(35.10),
+            date: Date().addingTimeInterval(-3600 * 36),
+            wallet: cashWallet,
+            category: transport
+        )
+
+        _ = Transaction.create(
+            in: context,
+            direction: "income",
+            amount: Decimal(850),
+            currencyCode: salaryWallet.baseCurrencyCode ?? "USD",
+            convertedAmountBase: Decimal(850),
+            date: Date().addingTimeInterval(-3600 * 72),
+            wallet: salaryWallet,
+            category: freelance
+        )
     }
 }

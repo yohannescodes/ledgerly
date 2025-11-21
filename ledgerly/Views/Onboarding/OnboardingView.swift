@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Multi-step onboarding matching the PRD: welcome, base currency, exchange mode, cloud sync, summary.
+/// Multi-step onboarding that matches the PRD: welcome → currency → exchange mode → cloud sync → summary.
 struct OnboardingView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
 
-    @State private var step: OnboardingStep = .welcome
+    @State private var currentStep: OnboardingStep = .welcome
     @State private var selectedCurrency: String
     @State private var selectedExchangeMode: ExchangeMode
     @State private var cloudSyncEnabled: Bool
@@ -19,26 +19,26 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 28) {
-            OnboardingHeader(step: step)
-            StepContentView(
-                step: step,
+            OnboardingHeader(step: currentStep)
+            StepContent(
+                step: currentStep,
                 selectedCurrency: $selectedCurrency,
                 currencySearchText: $currencySearchText,
                 selectedExchangeMode: $selectedExchangeMode,
                 cloudSyncEnabled: $cloudSyncEnabled,
-                currencySuggestions: CurrencyDataSource.suggested,
+                suggestions: CurrencyDataSource.suggested,
                 allCurrencies: CurrencyDataSource.all
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            HStack(spacing: 16) {
-                if step != .welcome {
+            HStack {
+                if currentStep != .welcome {
                     Button("Back", action: goBack)
                         .buttonStyle(.borderless)
                 }
                 Spacer()
                 Button(action: advance) {
-                    if step == .summary {
+                    if currentStep == .summary {
                         HStack(spacing: 8) {
                             if isSaving { ProgressView().tint(.white) }
                             Text("Finish Setup")
@@ -52,13 +52,11 @@ struct OnboardingView: View {
             }
         }
         .padding(24)
-        .animation(.easeInOut, value: step)
+        .animation(.easeInOut, value: currentStep)
     }
 
-    // MARK: - Flow Control
-
     private var canContinue: Bool {
-        switch step {
+        switch currentStep {
         case .welcome, .exchangeMode, .cloudSync, .summary:
             return true
         case .currency:
@@ -67,19 +65,18 @@ struct OnboardingView: View {
     }
 
     private func goBack() {
-        guard let previous = step.previous else { return }
-        step = previous
+        guard let previous = currentStep.previous else { return }
+        currentStep = previous
     }
 
     private func advance() {
         guard !isSaving else { return }
-        if step == .summary {
+        if currentStep == .summary {
             completeOnboarding()
             return
         }
-        if let next = step.next {
-            step = next
-        }
+        guard let next = currentStep.next else { return }
+        currentStep = next
     }
 
     private func completeOnboarding() {
@@ -94,7 +91,7 @@ struct OnboardingView: View {
     }
 }
 
-// MARK: - Header
+// MARK: Header
 
 private struct OnboardingHeader: View {
     let step: OnboardingStep
@@ -102,7 +99,7 @@ private struct OnboardingHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(step.header)
-                .font(.largeTitle.weight(.bold))
+                .font(.largeTitle.bold())
             Text(step.subtitle)
                 .foregroundStyle(.secondary)
             ProgressView(value: step.progress, total: 1)
@@ -112,9 +109,9 @@ private struct OnboardingHeader: View {
     }
 }
 
-// MARK: - Step Content
+// MARK: Step Content
 
-private struct StepContentView: View {
+private struct StepContent: View {
     let step: OnboardingStep
 
     @Binding var selectedCurrency: String
@@ -122,26 +119,26 @@ private struct StepContentView: View {
     @Binding var selectedExchangeMode: ExchangeMode
     @Binding var cloudSyncEnabled: Bool
 
-    let currencySuggestions: [CurrencyOption]
+    let suggestions: [CurrencyOption]
     let allCurrencies: [CurrencyOption]
 
     var body: some View {
         switch step {
         case .welcome:
-            WelcomeView()
+            WelcomeStepView()
         case .currency:
-            CurrencyStep(
+            CurrencyStepView(
                 selectedCurrency: $selectedCurrency,
                 searchText: $currencySearchText,
-                suggestions: currencySuggestions,
+                suggestions: suggestions,
                 options: filteredCurrencies
             )
         case .exchangeMode:
-            ExchangeModeStep(selectedMode: $selectedExchangeMode)
+            ExchangeModeStepView(selectedMode: $selectedExchangeMode)
         case .cloudSync:
-            CloudSyncStep(isEnabled: $cloudSyncEnabled)
+            CloudSyncStepView(isEnabled: $cloudSyncEnabled)
         case .summary:
-            SummaryStep(
+            SummaryStepView(
                 currency: selectedCurrency,
                 exchangeMode: selectedExchangeMode,
                 syncEnabled: cloudSyncEnabled
@@ -150,7 +147,7 @@ private struct StepContentView: View {
     }
 
     private var filteredCurrencies: [CurrencyOption] {
-        let trimmed = currencySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = currencySearchText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return allCurrencies }
         return allCurrencies.filter { option in
             option.code.localizedCaseInsensitiveContains(trimmed) ||
@@ -159,10 +156,10 @@ private struct StepContentView: View {
     }
 }
 
-private struct WelcomeView: View {
+private struct WelcomeStepView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Ledgerly keeps everything offline by default. You control when data syncs.")
+            Text("Ledgerly keeps everything on-device by default. You control when and how data syncs.")
             Label("Offline-first, no ads, no trackers.", systemImage: "lock.shield")
             Label("Track salary, cash, bank, and freelance wallets.", systemImage: "wallet.pass")
             Label("Budgeting, investments, and net worth in one place.", systemImage: "chart.line.uptrend.xyaxis")
@@ -171,7 +168,7 @@ private struct WelcomeView: View {
     }
 }
 
-private struct CurrencyStep: View {
+private struct CurrencyStepView: View {
     @Binding var selectedCurrency: String
     @Binding var searchText: String
 
@@ -184,14 +181,13 @@ private struct CurrencyStep: View {
                 .foregroundStyle(.secondary)
             TextField("Search currency", text: $searchText)
                 .textFieldStyle(.roundedBorder)
+
             if !suggestions.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(suggestions) { option in
-                            Button {
-                                selectedCurrency = option.code
-                            } label: {
-                                Text(option.code)
+                        ForEach(suggestions, id: \.code) { option in
+                            Button(action: { selectedCurrency = option.code }) {
+                                Text(verbatim: option.code)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(selectedCurrency == option.code ? Color.accentColor.opacity(0.2) : Color(.systemGray5))
@@ -202,23 +198,22 @@ private struct CurrencyStep: View {
                     }
                 }
             }
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(options) { option in
-                        Button {
-                            selectedCurrency = option.code
-                        } label: {
+                    ForEach(options, id: \.code) { option in
+                        Button(action: { selectedCurrency = option.code }) {
                             HStack {
                                 VStack(alignment: .leading) {
-                                    Text(option.name)
-                                    Text(option.code)
+                                    Text(verbatim: option.name)
+                                    Text(verbatim: option.code)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 if selectedCurrency == option.code {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.accentColor)
+                                        .foregroundStyle(Color.accentColor)
                                 }
                             }
                             .padding(.vertical, 8)
@@ -232,7 +227,7 @@ private struct CurrencyStep: View {
     }
 }
 
-private struct ExchangeModeStep: View {
+private struct ExchangeModeStepView: View {
     @Binding var selectedMode: ExchangeMode
     private let modes = ExchangeMode.allCases
 
@@ -240,38 +235,48 @@ private struct ExchangeModeStep: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Pick how exchange rates behave globally. Override per wallet later.")
                 .foregroundStyle(.secondary)
-            ForEach(modes) { mode in
-                Button {
+            ForEach(modes, id: \.self) { mode in
+                ExchangeModeCard(mode: mode, isSelected: selectedMode == mode) {
                     selectedMode = mode
-                } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(mode.title)
-                                .font(.headline)
-                            Spacer()
-                            if selectedMode == mode {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.accentColor)
-                            }
-                        }
-                        Text(mode.description)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(selectedMode == mode ? Color.accentColor : Color.clear, lineWidth: 2)
-                    )
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 }
 
-private struct CloudSyncStep: View {
+private struct ExchangeModeCard: View {
+    let mode: ExchangeMode
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(mode.title)
+                        .font(.headline)
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                Text(mode.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct CloudSyncStepView: View {
     @Binding var isEnabled: Bool
 
     var body: some View {
@@ -280,7 +285,7 @@ private struct CloudSyncStep: View {
                 VStack(alignment: .leading) {
                     Text("Sync via iCloud")
                         .font(.headline)
-                    Text("Keep it local or sync across devices later.")
+                    Text("Keep it local or enable sync later from Settings.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -298,7 +303,7 @@ private struct CloudSyncStep: View {
     }
 }
 
-private struct SummaryStep: View {
+private struct SummaryStepView: View {
     let currency: String
     let exchangeMode: ExchangeMode
     let syncEnabled: Bool
@@ -308,19 +313,17 @@ private struct SummaryStep: View {
             SummaryRow(title: "Base Currency", value: currency)
             SummaryRow(title: "Exchange Mode", value: exchangeMode.title)
             SummaryRow(title: "iCloud Sync", value: syncEnabled ? "Enabled" : "Disabled")
-            Text("You're ready to start tracking wallets, budgets, and investments.")
+            Text("You're ready to add wallets, budgets, and investments.")
                 .foregroundStyle(.secondary)
             Spacer()
         }
     }
 }
 
-// MARK: - Shared Types
+// MARK: Supporting Types
 
-private enum OnboardingStep: Int, CaseIterable, Identifiable {
+private enum OnboardingStep: Int, CaseIterable {
     case welcome, currency, exchangeMode, cloudSync, summary
-
-    var id: Int { rawValue }
 
     var header: String {
         switch self {
@@ -335,10 +338,10 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .welcome: return "Offline-first, privacy-respecting finance."
-        case .currency: return "We normalize everything using this currency."
+        case .currency: return "We normalize dashboards using this currency."
         case .exchangeMode: return "Official, parallel, or manual rates—your choice."
-        case .cloudSync: return "Keep data local or enable iCloud sync."
-        case .summary: return "Confirm and start building wallets."
+        case .cloudSync: return "Keep it local or enable iCloud sync."
+        case .summary: return "Confirm and start tracking."
         }
     }
 

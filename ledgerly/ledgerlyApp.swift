@@ -12,11 +12,15 @@ import SwiftUI
 struct ledgerlyApp: App {
     let persistenceController: PersistenceController
     @StateObject private var appSettingsStore: AppSettingsStore
+    @StateObject private var walletsStore: WalletsStore
+    @StateObject private var transactionsStore: TransactionsStore
 
     init() {
         let persistence = PersistenceController.shared
         self.persistenceController = persistence
         _appSettingsStore = StateObject(wrappedValue: AppSettingsStore(persistence: persistence))
+        _walletsStore = StateObject(wrappedValue: WalletsStore(persistence: persistence))
+        _transactionsStore = StateObject(wrappedValue: TransactionsStore(persistence: persistence))
     }
 
     var body: some Scene {
@@ -24,6 +28,8 @@ struct ledgerlyApp: App {
             ContentView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(appSettingsStore)
+                .environmentObject(walletsStore)
+                .environmentObject(transactionsStore)
         }
     }
 }

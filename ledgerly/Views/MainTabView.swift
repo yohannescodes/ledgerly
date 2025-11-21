@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct MainTabView: View {
+    let transactionsStore: TransactionsStore
+
     var body: some View {
         TabView {
             NavigationStack {
@@ -21,6 +23,14 @@ struct MainTabView: View {
             }
             .tabItem {
                 Label("Home", systemImage: "house")
+            }
+
+            NavigationStack {
+                TransactionsView(store: transactionsStore)
+                    .navigationTitle("Transactions")
+            }
+            .tabItem {
+                Label("Transactions", systemImage: "list.bullet.rectangle")
             }
 
             NavigationStack {

@@ -14,11 +14,59 @@
             </uniquenessConstraint>
         </uniquenessConstraints>
     </entity>
+    <entity name="Category" representedClassName="Category" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="type" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="colorHex" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="iconName" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Transaction" inverseName="category" inverseEntity="Transaction"/>
+    </entity>
+    <entity name="Transaction" representedClassName="Transaction" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="direction" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="amount" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="convertedAmountBase" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="date" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="exchangeRateValue" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="exchangeRateTimestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isTransfer" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="attachmentURL" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="wallet" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Wallet" inverseName="transactions" inverseEntity="Wallet"/>
+        <relationship name="category" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Category" inverseName="transactions" inverseEntity="Category"/>
+        <relationship name="counterpartyWallet" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Wallet" inverseName="transferPeers" inverseEntity="Wallet"/>
+    </entity>
+    <entity name="Wallet" representedClassName="Wallet" syncable="YES" codeGenerationType="class">
+        <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="iconName" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="baseCurrencyCode" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="walletType" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="startingBalance" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="currentBalance" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="includeInNetWorth" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="archived" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Transaction" inverseName="wallet" inverseEntity="Transaction"/>
+        <relationship name="transferPeers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Transaction" inverseName="counterpartyWallet" inverseEntity="Transaction"/>
+    </entity>
     <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <elements>
         <element name="AppSettings" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="Category" positionX="-63" positionY="-18" width="128" height="154"/>
+        <element name="Transaction" positionX="-63" positionY="-18" width="128" height="194"/>
+        <element name="Wallet" positionX="-63" positionY="-18" width="128" height="154"/>
         <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
     </elements>
 </model>

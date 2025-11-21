@@ -9,11 +9,12 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @EnvironmentObject private var transactionsStore: TransactionsStore
 
     var body: some View {
         Group {
             if appSettingsStore.snapshot.hasCompletedOnboarding {
-                MainTabView()
+                MainTabView(transactionsStore: transactionsStore)
             } else {
                 OnboardingView(initialSnapshot: appSettingsStore.snapshot)
             }
