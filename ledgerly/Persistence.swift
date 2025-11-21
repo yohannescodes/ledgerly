@@ -200,6 +200,7 @@ final class PersistenceController {
         )
 
         seedNetWorthSnapshotIfNeeded(in: context)
+        seedBudgetsAndGoalsIfNeeded(in: context, categories: [groceries, transport], wallet: salaryWallet)
     }
 
     private func seedNetWorthSnapshotIfNeeded(in context: NSManagedObjectContext) {
@@ -216,6 +217,34 @@ final class PersistenceController {
             coreNetWorth: totals.coreNetWorth,
             tangibleNetWorth: totals.tangibleNetWorth,
             volatileAssets: totals.volatileAssets
+        )
+    }
+
+    private func seedBudgetsAndGoalsIfNeeded(in context: NSManagedObjectContext, categories: [Category], wallet: Wallet) {
+        let request: NSFetchRequest<MonthlyBudget> = MonthlyBudget.fetchRequest()
+        request.fetchLimit = 1
+        let count = (try? context.count(for: request)) ?? 0
+        guard count == 0 else { return }
+
+        let month = Calendar.current.component(.month, from: Date())
+        let year = Calendar.current.component(.year, from: Date())
+        for category in categories {
+            _ = MonthlyBudget.create(
+                in: context,
+                category: category,
+                month: month,
+                year: year,
+                limit: Decimal(300),
+                currencyCode: wallet.baseCurrencyCode ?? "USD"
+            )
+        }
+
+        _ = SavingGoal.create(
+            in: context,
+            name: "Emergency Fund",
+            target: 5000,
+            currencyCode: wallet.baseCurrencyCode ?? "USD",
+            linkedWallet: wallet
         )
     }
 }

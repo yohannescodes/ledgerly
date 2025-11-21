@@ -3,6 +3,8 @@ import SwiftUI
 struct MainTabView: View {
     let transactionsStore: TransactionsStore
     let investmentsStore: InvestmentsStore
+    let budgetsStore: BudgetsStore
+    let goalsStore: GoalsStore
 
     var body: some View {
         TabView {
@@ -28,6 +30,22 @@ struct MainTabView: View {
             }
             .tabItem {
                 Label("Investments", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            NavigationStack {
+                BudgetsView()
+                    .environmentObject(budgetsStore)
+            }
+            .tabItem {
+                Label("Budgets", systemImage: "chart.pie.fill")
+            }
+
+            NavigationStack {
+                GoalsView()
+                    .environmentObject(goalsStore)
+            }
+            .tabItem {
+                Label("Goals", systemImage: "target")
             }
 
             NavigationStack {

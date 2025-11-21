@@ -1,8 +1,5 @@
 import SwiftUI
 import Charts
-
-
-
 import CoreData
 
 struct InvestmentAccountDetailView: View {
@@ -20,10 +17,10 @@ struct InvestmentAccountDetailView: View {
     var body: some View {
         List {
             summarySection
+
             Section(header: Text("Holdings")) {
                 if resolvedAccount.holdings.isEmpty {
-                    Text("No holdings yet")
-                        .foregroundStyle(.secondary)
+                    Text("No holdings yet").foregroundStyle(.secondary)
                 } else {
                     ForEach(resolvedAccount.holdings) { lot in
                         HoldingRow(lot: lot)
@@ -89,7 +86,6 @@ struct InvestmentAccountDetailView: View {
                 netWorthStore.reload()
             }
         }
-        .onChange(of: investmentsStore.accounts) { _ in }
     }
 
     private var summarySection: some View {
@@ -112,6 +108,72 @@ struct InvestmentAccountDetailView: View {
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 2
         return (formatter.string(from: value as NSNumber) ?? "0") + "%"
+    }
+}
+
+struct AddHoldingInput {
+    var symbol: String = ""
+    var name: String = ""
+    var assetType: String = "stock"
+    var quantity: Decimal = .zero
+    var costPerUnit: Decimal = .zero
+    var acquiredDate: Date = Date()
+    var walletID: NSManagedObjectID?
+}
+
+struct AddHoldingFormView: View {
+    let account: InvestmentAccountModel
+    let onSave: (AddHoldingInput) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var input = AddHoldingInput()
+    @EnvironmentObject private var walletsStore: WalletsStore
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Asset") {
+                    TextField("Symbol", text: $input.symbol)
+                        .textInputAutocapitalization(.characters)
+                    TextField("Name", text: $input.name)
+                    Picker("Type", selection: $input.assetType) {
+                        Text("Stock").tag("stock")
+                        Text("ETF").tag("etf")
+                        Text("Crypto").tag("crypto")
+                    }
+                }
+
+                Section("Position") {
+                    DecimalTextField(title: "Quantity", value: $input.quantity)
+                    DecimalTextField(title: "Cost / Unit", value: $input.costPerUnit)
+                    DatePicker("Acquired", selection: $input.acquiredDate, displayedComponents: .date)
+                    Picker("Fund from", selection: $input.walletID) {
+                        Text("None").tag(Optional<NSManagedObjectID>(nil))
+                        ForEach(walletsStore.wallets) { wallet in
+                            Text(wallet.name).tag(Optional(wallet.id))
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add Holding")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: dismiss.callAsFunction)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private var canSave: Bool {
+        !input.symbol.isEmpty && !input.name.isEmpty && input.quantity > 0 && input.costPerUnit > 0
+    }
+
+    private func save() {
+        onSave(input)
+        dismiss()
     }
 }
 
@@ -190,71 +252,5 @@ private struct SaleHistoryList: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
         return formatter.string(from: value as NSNumber) ?? "--"
-    }
-}
-
-struct AddHoldingInput {
-    var symbol: String = ""
-    var name: String = ""
-    var assetType: String = "stock"
-    var quantity: Decimal = .zero
-    var costPerUnit: Decimal = .zero
-    var acquiredDate: Date = Date()
-    var walletID: NSManagedObjectID?
-}
-
-struct AddHoldingFormView: View {
-    let account: InvestmentAccountModel
-    let onSave: (AddHoldingInput) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var input = AddHoldingInput()
-    @EnvironmentObject private var walletsStore: WalletsStore
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Asset") {
-                    TextField("Symbol", text: $input.symbol)
-                        .textInputAutocapitalization(.characters)
-                    TextField("Name", text: $input.name)
-                    Picker("Type", selection: $input.assetType) {
-                        Text("Stock").tag("stock")
-                        Text("ETF").tag("etf")
-                        Text("Crypto").tag("crypto")
-                    }
-                }
-
-                Section("Position") {
-                    DecimalTextField(title: "Quantity", value: $input.quantity)
-                    DecimalTextField(title: "Cost / Unit", value: $input.costPerUnit)
-                    DatePicker("Acquired", selection: $input.acquiredDate, displayedComponents: .date)
-                    Picker("Fund from", selection: $input.walletID) {
-                        Text("None").tag(Optional<NSManagedObjectID>(nil))
-                        ForEach(walletsStore.wallets) { wallet in
-                            Text(wallet.name).tag(Optional(wallet.id))
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Add Holding")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: dismiss.callAsFunction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                        .disabled(!canSave)
-                }
-            }
-        }
-    }
-
-    private var canSave: Bool {
-        !input.symbol.isEmpty && !input.name.isEmpty && input.quantity > 0 && input.costPerUnit > 0
-    }
-
-    private func save() {
-        onSave(input)
-        dismiss()
     }
 }

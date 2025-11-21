@@ -17,6 +17,8 @@ struct ledgerlyApp: App {
     @StateObject private var transactionsStore: TransactionsStore
     @StateObject private var investmentsStore: InvestmentsStore
     @StateObject private var netWorthStore: NetWorthStore
+    @StateObject private var budgetsStore: BudgetsStore
+    @StateObject private var goalsStore: GoalsStore
 
     init() {
         let persistence = PersistenceController.shared
@@ -32,6 +34,8 @@ struct ledgerlyApp: App {
         _transactionsStore = StateObject(wrappedValue: TransactionsStore(persistence: persistence))
         _investmentsStore = StateObject(wrappedValue: InvestmentsStore(persistence: persistence, priceService: priceService))
         _netWorthStore = StateObject(wrappedValue: NetWorthStore(persistence: persistence))
+        _budgetsStore = StateObject(wrappedValue: BudgetsStore(persistence: persistence))
+        _goalsStore = StateObject(wrappedValue: GoalsStore(persistence: persistence))
     }
 
     var body: some Scene {
@@ -43,6 +47,8 @@ struct ledgerlyApp: App {
                 .environmentObject(transactionsStore)
                 .environmentObject(investmentsStore)
                 .environmentObject(netWorthStore)
+                .environmentObject(budgetsStore)
+                .environmentObject(goalsStore)
         }
     }
 }
