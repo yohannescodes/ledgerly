@@ -32,6 +32,10 @@ struct TransactionFilter {
     }
 
     var segment: Segment = .all
+    var walletID: NSManagedObjectID?
+    var startDate: Date?
+    var endDate: Date?
+    var searchText: String = ""
 }
 
 struct TransactionSection: Identifiable, Hashable {
@@ -49,14 +53,62 @@ final class TransactionsStore: ObservableObject {
         self.persistence = persistence
     }
 
+    func createTransaction(input: TransactionFormInput) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let walletID = input.walletID,
+                  let wallet = try? context.existingObject(with: walletID) as? Wallet else { return }
+            let converter = CurrencyConverter.fromSettings(in: context)
+            let baseAmount = converter.convertToBase(input.amount, currency: input.currencyCode)
+            let category = input.categoryID.flatMap { try? context.existingObject(with: $0) as? Category }
+            _ = Transaction.create(
+                in: context,
+                direction: input.direction.rawValue,
+                amount: input.amount,
+                currencyCode: input.currencyCode,
+                convertedAmountBase: baseAmount,
+                date: input.date,
+                wallet: wallet,
+                category: category
+            )
+            self.adjust(wallet: wallet, by: input.amount, currency: input.currencyCode, direction: input.direction, converter: converter)
+
+            if input.direction == .transfer,
+               let destinationID = input.destinationWalletID,
+               let destination = try? context.existingObject(with: destinationID) as? Wallet {
+                self.adjustTransfer(to: destination, amount: input.amount, currency: input.currencyCode, converter: converter)
+            }
+
+            do {
+                try context.save()
+            } catch {
+                assertionFailure("Failed to save transaction: \(error)")
+            }
+
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+            }
+        }
+    }
+
+    func deleteTransaction(id: NSManagedObjectID) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let transaction = try? context.existingObject(with: id) as? Transaction else { return }
+            context.delete(transaction)
+            try? context.save()
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+            }
+        }
+    }
+
     func fetchSections(filter: TransactionFilter) -> [TransactionSection] {
         let context = persistence.container.viewContext
         var sections: [TransactionSection] = []
         context.performAndWait {
             let request = Transaction.fetchRequestAll()
-            if let predicate = filter.segment.predicate {
-                request.predicate = predicate
-            }
+            request.predicate = buildPredicate(from: filter, in: context)
             do {
                 let results = try context.fetch(request)
                 let models = results.map(TransactionModel.init)
@@ -81,5 +133,54 @@ final class TransactionsStore: ObservableObject {
                 return TransactionSection(id: key, date: key, transactions: values, total: total)
             }
             .sorted { $0.date > $1.date }
+    }
+
+    private func buildPredicate(from filter: TransactionFilter, in context: NSManagedObjectContext) -> NSPredicate? {
+        var predicates: [NSPredicate] = []
+        if let segmentPredicate = filter.segment.predicate {
+            predicates.append(segmentPredicate)
+        }
+        if let walletID = filter.walletID,
+           let wallet = try? context.existingObject(with: walletID) {
+            predicates.append(NSPredicate(format: "wallet == %@", wallet))
+        }
+        if let start = filter.startDate {
+            predicates.append(NSPredicate(format: "date >= %@", start as NSDate))
+        }
+        if let end = filter.endDate {
+            predicates.append(NSPredicate(format: "date <= %@", end as NSDate))
+        }
+        if !filter.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+            let text = filter.searchText
+            predicates.append(NSPredicate(format: "notes CONTAINS[cd] %@ OR wallet.name CONTAINS[cd] %@", text, text))
+        }
+        guard !predicates.isEmpty else { return nil }
+        if predicates.count == 1 { return predicates.first }
+        return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+    }
+
+    private func adjust(wallet: Wallet, by amount: Decimal, currency: String, direction: TransactionFormInput.Direction, converter: CurrencyConverter) {
+        let baseAmount = converter.convertToBase(amount, currency: currency)
+        let walletCurrency = wallet.baseCurrencyCode ?? converter.baseCurrency
+        let walletAmount = converter.convertFromBase(baseAmount, to: walletCurrency)
+        let current = wallet.currentBalance as Decimal? ?? .zero
+        switch direction {
+        case .expense:
+            wallet.currentBalance = NSDecimalNumber(decimal: current - walletAmount)
+        case .income:
+            wallet.currentBalance = NSDecimalNumber(decimal: current + walletAmount)
+        case .transfer:
+            wallet.currentBalance = NSDecimalNumber(decimal: current - walletAmount)
+        }
+        wallet.updatedAt = Date()
+    }
+
+    private func adjustTransfer(to wallet: Wallet, amount: Decimal, currency: String, converter: CurrencyConverter) {
+        let baseAmount = converter.convertToBase(amount, currency: currency)
+        let walletCurrency = wallet.baseCurrencyCode ?? converter.baseCurrency
+        let walletAmount = converter.convertFromBase(baseAmount, to: walletCurrency)
+        let current = wallet.currentBalance as Decimal? ?? .zero
+        wallet.currentBalance = NSDecimalNumber(decimal: current + walletAmount)
+        wallet.updatedAt = Date()
     }
 }

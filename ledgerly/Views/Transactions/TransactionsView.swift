@@ -5,7 +5,8 @@ struct TransactionsView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @StateObject private var viewModel: TransactionsViewModel
     @State private var showingFilterSheet = false
-    @State private var showingAddSheet = false
+    @State private var showingCreateSheet = false
+    @State private var selectedTransaction: TransactionModel?
 
     init(store: TransactionsStore) {
         _viewModel = StateObject(wrappedValue: TransactionsViewModel(store: store))
@@ -13,16 +14,8 @@ struct TransactionsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Segment", selection: Binding(get: { viewModel.filter.segment }, set: { viewModel.updateSegment($0) })) {
-                ForEach(TransactionFilter.Segment.allCases) { segment in
-                    Text(segment.title)
-                        .tag(segment)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.top)
-
+            summaryHeader
+            segmentedControl
             if viewModel.sections.isEmpty {
                 emptyState
             } else {
@@ -31,6 +24,8 @@ struct TransactionsView: View {
                         Section(header: sectionHeader(for: section)) {
                             ForEach(section.transactions) { transaction in
                                 TransactionRow(model: transaction)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedTransaction = transaction }
                             }
                         }
                     }
@@ -40,44 +35,74 @@ struct TransactionsView: View {
         }
         .navigationTitle("Transactions")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { showingFilterSheet = true }) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
+                    Label("Filters", systemImage: "line.3.horizontal.decrease.circle")
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: { showingAddSheet = true }) {
-                    Image(systemName: "plus.circle.fill")
+                Button(action: { showingCreateSheet = true }) {
+                    Label("Add", systemImage: "plus.circle")
                 }
             }
         }
         .sheet(isPresented: $showingFilterSheet) {
-            TransactionsFilterSheet(filter: viewModel.filter)
-                .presentationDetents([.medium])
+            TransactionsFilterSheet(filter: viewModel.filter, wallets: walletsStore.wallets) { updated in
+                viewModel.apply(filter: updated)
+            }
+            .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $showingAddSheet) {
-            AddTransactionPlaceholderView(wallets: walletsStore.wallets)
-                .presentationDetents([.large])
+        .sheet(isPresented: $showingCreateSheet) {
+            NavigationStack {
+                TransactionFormView(wallets: walletsStore.wallets) { input in
+                    viewModel.createTransaction(input: input)
+                }
+            }
         }
-        .onAppear {
-            viewModel.refresh()
+        .sheet(item: $selectedTransaction) { transaction in
+            NavigationStack {
+                TransactionDetailView(model: transaction) { action in
+                    viewModel.handle(action: action, for: transaction)
+                }
+            }
+        }
+        .onAppear { viewModel.refresh() }
+    }
+
+    private var segmentedControl: some View {
+        Picker("Segment", selection: Binding(get: { viewModel.filter.segment }, set: { viewModel.updateSegment($0) })) {
+            ForEach(TransactionFilter.Segment.allCases) { segment in
+                Text(segment.title).tag(segment)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding([.horizontal, .bottom])
+    }
+
+    private var summaryHeader: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                SummaryTile(title: "This Month", amount: viewModel.currentMonthTotal, color: .blue)
+                SummaryTile(title: "Last Month", amount: viewModel.previousMonthTotal, color: .gray)
+                SummaryTile(title: "Income", amount: viewModel.currentIncomeTotal, color: .green)
+                SummaryTile(title: "Expenses", amount: viewModel.currentExpenseTotal, color: .red)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
         }
     }
 
     private func sectionHeader(for section: TransactionSection) -> some View {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        let title = formatter.string(from: section.date)
-        return HStack {
-            Text(title)
+        HStack {
+            Text(section.date, style: .date)
             Spacer()
-            Text(section.total as NSNumber, formatter: numberFormatter)
+            Text(section.total as NSNumber, formatter: currencyFormatter)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(section.total >= 0 ? .green : .red)
         }
     }
 
-    private var numberFormatter: NumberFormatter {
+    private var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = appSettingsStore.snapshot.baseCurrencyCode
@@ -90,111 +115,35 @@ struct TransactionsView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text("No transactions yet")
-                .font(.title3)
-                .fontWeight(.semibold)
-            Text("Add your first expense or income to see summaries here.")
+                .font(.title3).fontWeight(.semibold)
+            Text("Tap Add to log your first income or expense.")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-private struct TransactionRow: View {
-    let model: TransactionModel
+private struct SummaryTile: View {
+    let title: String
+    let amount: Decimal
+    let color: Color
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(model.category?.name ?? model.direction.capitalized)
-                    .font(.headline)
-                Text(model.walletName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(amountText)
-                    .font(.headline)
-                    .foregroundStyle(model.direction == "expense" ? .red : .green)
-                Text(model.currencyCode)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(format(amount))
+                .font(.headline)
         }
-        .padding(.vertical, 4)
+        .padding()
+        .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var amountText: String {
+    private func format(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = model.currencyCode
-        return formatter.string(from: model.amount as NSNumber) ?? "--"
+        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
+        return formatter.string(from: value as NSNumber) ?? "--"
     }
-}
-
-private struct TransactionsFilterSheet: View {
-    let filter: TransactionFilter
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Segment") {
-                    Picker("Type", selection: .constant(filter.segment)) {
-                        ForEach(TransactionFilter.Segment.allCases) { segment in
-                            Text(segment.title).tag(segment)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                Section {
-                    Text("More filters coming soon")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Filters")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done", action: dismiss.callAsFunction)
-                }
-            }
-        }
-    }
-}
-
-private struct AddTransactionPlaceholderView: View {
-    let wallets: [WalletModel]
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Wallet") {
-                    if wallets.isEmpty {
-                        Text("No wallets available")
-                    } else {
-                        Text(wallets.first?.name ?? "Wallet")
-                    }
-                }
-                Section("Details") {
-                    Text("Transaction form will arrive in the next iteration.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("New Transaction")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", action: dismiss.callAsFunction)
-                }
-            }
-        }
-    }
-}
-
-#Preview {
-    let persistence = PersistenceController.preview
-    let transactionsStore = TransactionsStore(persistence: persistence)
-    TransactionsView(store: transactionsStore)
-        .environmentObject(AppSettingsStore(persistence: persistence))
-        .environmentObject(WalletsStore(persistence: persistence))
 }

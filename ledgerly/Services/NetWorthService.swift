@@ -18,18 +18,6 @@ struct NetWorthTotals {
     var totalInvestments: Decimal { stockInvestments + cryptoInvestments }
 }
 
-struct CurrencyConverter {
-    let baseCurrency: String
-    let rates: [String: Decimal]
-
-    func convert(_ amount: Decimal, from currency: String?) -> Decimal {
-        guard let code = currency?.uppercased(), !code.isEmpty else { return amount }
-        if code == baseCurrency.uppercased() { return amount }
-        guard let rate = rates[code] else { return amount }
-        return amount * rate
-    }
-}
-
 final class NetWorthService {
     private let persistence: PersistenceController
 
@@ -39,7 +27,7 @@ final class NetWorthService {
 
     func computeTotals() -> NetWorthTotals {
         let context = persistence.container.viewContext
-        let converter = currencyConverter(in: context)
+        let converter = CurrencyConverter.fromSettings(in: context)
         var totalAssets: Decimal = .zero
         var totalLiabilities: Decimal = .zero
         var walletAssets: Decimal = .zero
@@ -127,7 +115,7 @@ final class NetWorthService {
         guard let assets = try? context.fetch(request) else { return .zero }
         var total: Decimal = .zero
         for asset in assets {
-            let value = converter.convert(asset.value as Decimal? ?? .zero, from: asset.currencyCode)
+            let value = converter.convertToBase(asset.value as Decimal? ?? .zero, currency: asset.currencyCode)
             total += value
             if asset.includeInCore { core += value }
             if asset.includeInTangible { tangible += value }
@@ -143,7 +131,7 @@ final class NetWorthService {
         let request: NSFetchRequest<ManualLiability> = ManualLiability.fetchRequest()
         guard let liabilities = try? context.fetch(request) else { return .zero }
         return liabilities.reduce(.zero) {
-            $0 + converter.convert($1.balance as Decimal? ?? .zero, from: $1.currencyCode)
+            $0 + converter.convertToBase($1.balance as Decimal? ?? .zero, currency: $1.currencyCode)
         }
     }
 
@@ -158,7 +146,7 @@ final class NetWorthService {
             let quantity = lot.quantity as Decimal? ?? .zero
             let latestPrice = latestSnapshotPrice(for: asset)
             if let price = latestPrice {
-                let value = converter.convert(quantity * price, from: asset.currencyCode)
+                let value = converter.convertToBase(quantity * price, currency: asset.currencyCode)
                 total += value
                 if (asset.assetType ?? "").lowercased().contains("crypto") {
                     crypto += value
@@ -175,20 +163,8 @@ final class NetWorthService {
         request.predicate = NSPredicate(format: "includeInNetWorth == YES")
         guard let wallets = try? context.fetch(request) else { return .zero }
         return wallets.reduce(.zero) {
-            $0 + converter.convert($1.currentBalance as Decimal? ?? .zero, from: $1.baseCurrencyCode)
+            $0 + converter.convertToBase($1.currentBalance as Decimal? ?? .zero, currency: $1.baseCurrencyCode)
         }
-    }
-
-    private func currencyConverter(in context: NSManagedObjectContext) -> CurrencyConverter {
-        var base = Locale.current.currency?.identifier ?? "USD"
-        var rates: [String: Decimal] = [:]
-        context.performAndWait {
-            if let settings = AppSettings.fetchSingleton(in: context) {
-                base = settings.baseCurrencyCode ?? base
-                rates = ExchangeRateStorage.decode(settings.customExchangeRates)
-            }
-        }
-        return CurrencyConverter(baseCurrency: base, rates: rates)
     }
 
     private func latestSnapshotPrice(for asset: InvestmentAsset) -> Decimal? {
