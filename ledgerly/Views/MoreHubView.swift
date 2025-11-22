@@ -4,6 +4,10 @@ struct MoreHubView: View {
     var body: some View {
         List {
             Section("Planning") {
+                NavigationLink(destination: ManualEntriesView()) {
+                    Label("Manual Entries", systemImage: "square.and.pencil")
+                }
+
                 NavigationLink(destination: BudgetsView()) {
                     Label("Budgets", systemImage: "chart.pie.fill")
                 }

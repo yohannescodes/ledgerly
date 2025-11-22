@@ -59,16 +59,16 @@ final class TransactionsViewModel: ObservableObject {
         previousMonthTotal = totalAmount(from: previousMonth, to: startOfMonth)
         let allTransactions = sections.flatMap { $0.transactions }
         currentIncomeTotal = allTransactions.filter { $0.direction == "income" }
-            .reduce(.zero) { $0 + $1.amount }
+            .reduce(.zero) { $0 + $1.convertedAmountBase }
         currentExpenseTotal = allTransactions.filter { $0.direction == "expense" }
-            .reduce(.zero) { $0 + $1.amount }
+            .reduce(.zero) { $0 + $1.convertedAmountBase }
     }
 
     private func totalAmount(from start: Date, to end: Date) -> Decimal {
         let allTransactions = sections.flatMap { $0.transactions }
         let filtered = allTransactions.filter { $0.date >= start && $0.date <= end }
         return filtered.reduce(.zero) { partial, transaction in
-            partial + (transaction.direction == "expense" ? -transaction.amount : transaction.amount)
+            partial + transaction.signedBaseAmount
         }
     }
 }

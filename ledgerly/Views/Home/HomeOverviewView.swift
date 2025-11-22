@@ -1,8 +1,11 @@
 import SwiftUI
+import Charts
 
 struct HomeOverviewView: View {
     @EnvironmentObject private var netWorthStore: NetWorthStore
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @EnvironmentObject private var transactionsStore: TransactionsStore
+    @State private var showingDashboardPreferences = false
 
     var body: some View {
         ScrollView {
@@ -17,16 +20,30 @@ struct HomeOverviewView: View {
                         widgetView(for: widget)
                     }
                 }
-                NetWorthFormulaCard(
-                    totals: netWorthStore.liveTotals,
-                    baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode
-                )
-                NavigationLink("Manage Manual Assets & Liabilities") {
+                NavigationLink("Manage Manual Assets, Investments & Liabilities") {
                     ManualEntriesView()
                 }
             }
             .frame(maxWidth: .infinity)
             .padding()
+        }
+        .navigationTitle(dashboardTitle)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingDashboardPreferences = true }) {
+                    Label("Customize", systemImage: "slider.horizontal.3")
+                }
+            }
+        }
+        .sheet(isPresented: $showingDashboardPreferences) {
+            NavigationStack {
+                DashboardPreferencesView()
+            }
+        }
+        .task(id: appSettingsStore.snapshot.baseCurrencyCode) {
+            await ManualInvestmentPriceService.shared.refresh(baseCurrency: appSettingsStore.snapshot.baseCurrencyCode)
+            await MainActor.run { netWorthStore.reload() }
         }
         .onAppear { netWorthStore.reload() }
     }
@@ -35,83 +52,30 @@ struct HomeOverviewView: View {
         appSettingsStore.snapshot.dashboardWidgets
     }
 
+    private var dashboardTitle: String {
+        if let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String, !name.isEmpty {
+            return "\(name) Dashboard"
+        }
+        return "Your Dashboard"
+    }
+
     @ViewBuilder
     private func widgetView(for widget: DashboardWidget) -> some View {
         switch widget {
-        case .netWorthSummary:
-            EmptyView()
         case .budgetSummary:
             BudgetSummaryCard()
         case .goalsSummary:
             GoalsSummaryCard()
         case .netWorthHistory:
             NetWorthHistoryCard(
-                snapshots: netWorthStore.displaySnapshots,
+                totals: netWorthStore.liveTotals,
                 baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode
             )
+        case .expenseBreakdown:
+            ExpenseBreakdownCard()
+        case .incomeProgress:
+            IncomeProgressCard()
         }
-    }
-}
-
-private struct NetWorthFormulaCard: View {
-    let totals: NetWorthTotals?
-    let baseCurrencyCode: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Financial Health")
-                .font(.headline)
-            Text("Total Net Worth = (Assets + Investments + Wallets + Receivables) - Liabilities")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if let totals {
-                Group {
-                    formulaRow(title: "Assets", value: totals.manualAssets)
-                    VStack(alignment: .leading, spacing: 4) {
-                        formulaRow(title: "Investments", value: totals.totalInvestments)
-                        HStack {
-                            Text("   • Stocks")
-                            Spacer()
-                            Text(formatCurrency(totals.stockInvestments))
-                                .font(.caption)
-                        }
-                        HStack {
-                            Text("   • Crypto")
-                            Spacer()
-                            Text(formatCurrency(totals.cryptoInvestments))
-                                .font(.caption)
-                        }
-                    }
-                    formulaRow(title: "Wallets", value: totals.walletAssets)
-                    formulaRow(title: "Receivables", value: totals.receivables)
-                }
-                Divider()
-                formulaRow(title: "Total Assets", value: totals.totalAssets, emphasize: true)
-                formulaRow(title: "Liabilities", value: totals.totalLiabilities)
-                Divider()
-                formulaRow(title: "Net Worth", value: totals.netWorth, emphasize: true)
-            } else {
-                Text("Add wallets and assets to see the breakdown.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
-    }
-
-    private func formulaRow(title: String, value: Decimal, emphasize: Bool = false) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(formatCurrency(value))
-                .fontWeight(emphasize ? .bold : .semibold)
-        }
-    }
-
-    private func formatCurrency(_ value: Decimal) -> String {
-        CurrencyFormatter.string(for: value, code: baseCurrencyCode)
     }
 }
 
@@ -119,6 +83,227 @@ private struct NetWorthFormulaCard: View {
     HomeOverviewView()
         .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))
         .environmentObject(NetWorthStore(persistence: PersistenceController.preview))
+        .environmentObject(TransactionsStore(persistence: PersistenceController.preview))
         .environmentObject(BudgetsStore(persistence: PersistenceController.preview))
         .environmentObject(GoalsStore(persistence: PersistenceController.preview))
+}
+
+// MARK: - Dashboard Cards
+
+struct ExpenseBreakdownCard: View {
+    enum Range: String, CaseIterable, Identifiable {
+        case month
+        case quarter
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .month: return "30D"
+            case .quarter: return "90D"
+            }
+        }
+
+        var startDate: Date {
+            let calendar = Calendar.current
+            let components: DateComponents
+            switch self {
+            case .month:
+                components = DateComponents(day: -30)
+            case .quarter:
+                components = DateComponents(day: -90)
+            }
+            return calendar.date(byAdding: components, to: Date()) ?? Date()
+        }
+    }
+
+    @EnvironmentObject private var transactionsStore: TransactionsStore
+    @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @State private var range: Range = .month
+    @State private var segments: [ExpenseSegment] = []
+    @State private var totals = TransactionsStore.ExpenseTotals(currentTotal: .zero, previousTotal: .zero)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Expense Breakdown")
+                        .font(.headline)
+                    HStack(spacing: 8) {
+                        Text(CurrencyFormatter.string(for: totals.currentTotal, code: appSettingsStore.snapshot.baseCurrencyCode))
+                            .font(.title3.bold())
+                        changeBadge
+                    }
+                }
+                Spacer()
+                Picker("Range", selection: $range) {
+                    ForEach(Range.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
+            }
+
+            if segments.isEmpty {
+                Text("Log expenses to see where your money goes.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(segments) { segment in
+                    SectorMark(
+                        angle: .value("Amount", segment.amountValue),
+                        innerRadius: .ratio(0.45),
+                        outerRadius: .ratio(1)
+                    )
+                    .foregroundStyle(segment.color)
+                }
+                .frame(height: 220)
+                .chartLegend(.hidden)
+
+                ForEach(segments) { segment in
+                    HStack {
+                        Circle()
+                            .fill(segment.color)
+                            .frame(width: 10, height: 10)
+                        Text(segment.label)
+                        Spacer()
+                        Text(CurrencyFormatter.string(for: segment.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .onAppear(perform: reload)
+        .onChange(of: range) { _ in reload() }
+    }
+
+    private var changeBadge: some View {
+        let delta = totals.currentTotal - totals.previousTotal
+        let percentage = totals.previousTotal == .zero ? nil : (delta / totals.previousTotal)
+        let arrow: String
+        let color: Color
+        if let percentage {
+            if percentage >= 0 {
+                arrow = "arrow.up"
+                color = .red
+            } else {
+                arrow = "arrow.down"
+                color = .green
+            }
+        } else {
+            arrow = "circle"
+            color = .secondary
+        }
+        let pctText: String
+        if let percentage {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .percent
+            formatter.maximumFractionDigits = 1
+            pctText = formatter.string(from: (percentage as NSDecimalNumber)) ?? "--"
+        } else if totals.currentTotal == .zero {
+            pctText = "0%"
+        } else {
+            pctText = "--"
+        }
+        return HStack(spacing: 4) {
+            Image(systemName: arrow)
+            Text(pctText)
+        }
+        .font(.caption.bold())
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.15))
+        .clipShape(Capsule())
+        .foregroundStyle(color)
+    }
+
+    private func reload() {
+        let breakdown = transactionsStore.fetchExpenseBreakdown(since: range.startDate)
+        totals = transactionsStore.fetchMonthlyExpenseTotals()
+        let palette: [Color] = [.pink, .orange, .purple, .blue, .green, .yellow, .teal, .indigo]
+        let mapped: [ExpenseSegment] = breakdown.enumerated().map { index, entry in
+            let color = Color(hex: entry.colorHex ?? "") ?? palette[index % palette.count].opacity(0.85)
+            return ExpenseSegment(label: entry.label, amount: entry.convertedAmount, color: color)
+        }
+        segments = mapped
+    }
+}
+
+private struct ExpenseSegment: Identifiable {
+    let id = UUID()
+    let label: String
+    let amount: Decimal
+    let color: Color
+
+    var amountValue: Double { NSDecimalNumber(decimal: amount).doubleValue }
+}
+
+struct IncomeProgressCard: View {
+    @EnvironmentObject private var transactionsStore: TransactionsStore
+    @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @State private var entries: [TransactionsStore.IncomeProgressEntry] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Income Progress (12M)")
+                    .font(.headline)
+                Spacer()
+                if let latest = entries.last {
+                    Text(CurrencyFormatter.string(for: latest.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if entries.isEmpty {
+                Text("Log income transactions to visualize progress.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Chart(entries) { entry in
+                    BarMark(
+                        x: .value("Month", entry.monthStart, unit: .month),
+                        y: .value("Income", NSDecimalNumber(decimal: entry.amount).doubleValue)
+                    )
+                    .foregroundStyle(Color.green.gradient)
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) { value in
+                        if let date = value.as(Date.self) {
+                            AxisValueLabel(formatMonth(date))
+                        }
+                    }
+                }
+                .frame(height: 220)
+
+                HStack {
+                    Text("Year-to-date")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(CurrencyFormatter.string(for: totalAmount, code: appSettingsStore.snapshot.baseCurrencyCode))
+                        .font(.caption.bold())
+                }
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .onAppear(perform: reload)
+    }
+
+    private var totalAmount: Decimal {
+        entries.reduce(.zero) { $0 + $1.amount }
+    }
+
+    private func reload() {
+        entries = transactionsStore.fetchMonthlyIncomeProgress()
+    }
+
+    private func formatMonth(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter.string(from: date)
+    }
 }

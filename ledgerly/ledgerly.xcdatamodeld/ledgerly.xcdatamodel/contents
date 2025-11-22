@@ -86,6 +86,13 @@
         <attribute name="includeInCore" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="includeInTangible" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="investmentCoinID" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="investmentSymbol" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="investmentQuantity" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="investmentCostPerUnit" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="marketPrice" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="marketPriceCurrencyCode" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="marketPriceUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ManualLiability" representedClassName="ManualLiability" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>

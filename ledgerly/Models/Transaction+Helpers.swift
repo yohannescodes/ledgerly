@@ -19,6 +19,22 @@ struct TransactionModel: Identifiable, Hashable {
     let walletName: String
     let walletCurrency: String
     let category: DisplayCategory?
+
+    var signedAmount: Decimal {
+        switch direction.lowercased() {
+        case "expense": return -amount
+        case "transfer": return .zero
+        default: return amount
+        }
+    }
+
+    var signedBaseAmount: Decimal {
+        switch direction.lowercased() {
+        case "expense": return -convertedAmountBase
+        case "transfer": return .zero
+        default: return convertedAmountBase
+        }
+    }
 }
 
 extension TransactionModel {

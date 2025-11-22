@@ -1,8 +1,9 @@
 import Foundation
 
 enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
-    case netWorthSummary
     case netWorthHistory
+    case expenseBreakdown
+    case incomeProgress
     case budgetSummary
     case goalsSummary
 
@@ -10,8 +11,9 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .netWorthSummary: return "Net Worth Snapshot"
-        case .netWorthHistory: return "Net Worth Trend"
+        case .netWorthHistory: return "Net Worth Breakdown"
+        case .expenseBreakdown: return "Expense Breakdown"
+        case .incomeProgress: return "Income Progress"
         case .budgetSummary: return "Budgets"
         case .goalsSummary: return "Goals"
         }
@@ -19,10 +21,12 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
 
     var detail: String {
         switch self {
-        case .netWorthSummary:
-            return "Latest totals broken down by assets and liabilities."
         case .netWorthHistory:
-            return "Historical chart with annotations and overlays."
+            return "See how each asset class contributes to your total net worth."
+        case .expenseBreakdown:
+            return "Visualize where your spending goes across categories."
+        case .incomeProgress:
+            return "Track monthly income for the past year."
         case .budgetSummary:
             return "Top monthly budgets with utilization."
         case .goalsSummary:
@@ -32,15 +36,16 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
 
     var iconName: String {
         switch self {
-        case .netWorthSummary: return "chart.pie"
         case .netWorthHistory: return "chart.line.uptrend.xyaxis"
+        case .expenseBreakdown: return "chart.pie"
+        case .incomeProgress: return "chart.bar.xaxis"
         case .budgetSummary: return "chart.bar"
         case .goalsSummary: return "target"
         }
     }
 
     static var defaultOrder: [DashboardWidget] {
-        [.netWorthSummary, .netWorthHistory, .budgetSummary, .goalsSummary]
+        [.netWorthHistory, .expenseBreakdown, .incomeProgress, .budgetSummary, .goalsSummary]
     }
 }
 

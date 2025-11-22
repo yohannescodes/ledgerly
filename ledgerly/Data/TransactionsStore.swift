@@ -53,6 +53,25 @@ final class TransactionsStore: ObservableObject {
         self.persistence = persistence
     }
 
+    struct ExpenseBreakdownEntry: Identifiable {
+        let id = UUID()
+        let label: String
+        let amount: Decimal
+        let convertedAmount: Decimal
+        let colorHex: String?
+    }
+
+    struct ExpenseTotals {
+        let currentTotal: Decimal
+        let previousTotal: Decimal
+    }
+
+    struct IncomeProgressEntry: Identifiable {
+        let id = UUID()
+        let monthStart: Date
+        let amount: Decimal
+    }
+
     func createTransaction(input: TransactionFormInput) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -120,6 +139,108 @@ final class TransactionsStore: ObservableObject {
         return sections
     }
 
+    func fetchExpenseBreakdown(since startDate: Date) -> [ExpenseBreakdownEntry] {
+        let context = persistence.container.viewContext
+        var entries: [ExpenseBreakdownEntry] = []
+        context.performAndWait {
+            let request = Transaction.fetchRequestAll()
+            let predicates: [NSPredicate] = [
+                NSPredicate(format: "direction == %@", "expense"),
+                NSPredicate(format: "date >= %@", startDate as NSDate)
+            ]
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            do {
+                let results = try context.fetch(request)
+                let models = results.map(TransactionModel.init)
+                let grouped = Dictionary(grouping: models) { model -> String in
+                    model.category?.name ?? "Uncategorized"
+                }
+                entries = grouped.map { key, transactions in
+                    let total = transactions.reduce(Decimal.zero) { $0 + $1.amount }
+                    let convertedTotal = transactions.reduce(Decimal.zero) { $0 + $1.convertedAmountBase }
+                    let colorHex = transactions.first?.category?.colorHex
+                    return ExpenseBreakdownEntry(label: key, amount: total, convertedAmount: convertedTotal, colorHex: colorHex)
+                }
+                .sorted { $0.convertedAmount > $1.convertedAmount }
+            } catch {
+                assertionFailure("Failed to fetch expense breakdown: \(error)")
+            }
+        }
+        return entries
+    }
+
+    func fetchMonthlyExpenseTotals() -> ExpenseTotals {
+        let context = persistence.container.viewContext
+        var current: Decimal = .zero
+        var previous: Decimal = .zero
+        context.performAndWait {
+            let calendar = Calendar.current
+            let now = Date()
+            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+            let previousStart = calendar.date(byAdding: .month, value: -1, to: startOfMonth) ?? now
+            current = totalExpenses(from: startOfMonth, to: now, context: context)
+            previous = totalExpenses(from: previousStart, to: startOfMonth, context: context)
+        }
+        return ExpenseTotals(currentTotal: current, previousTotal: previous)
+    }
+
+    private func totalExpenses(from start: Date, to end: Date, context: NSManagedObjectContext) -> Decimal {
+        let request = Transaction.fetchRequestAll()
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            NSPredicate(format: "direction == %@", "expense"),
+            NSPredicate(format: "date >= %@", start as NSDate),
+            NSPredicate(format: "date < %@", end as NSDate)
+        ])
+        do {
+            let results = try context.fetch(request)
+            let models = results.map(TransactionModel.init)
+            return models.reduce(.zero) { $0 + $1.convertedAmountBase }
+        } catch {
+            assertionFailure("Failed to fetch expense totals: \(error)")
+            return .zero
+        }
+    }
+
+    func fetchMonthlyIncomeProgress(monthCount: Int = 12) -> [IncomeProgressEntry] {
+        let context = persistence.container.viewContext
+        var buckets: [Date: Decimal] = [:]
+        context.performAndWait {
+            let calendar = Calendar.current
+            let now = Date()
+            guard let windowStart = calendar.date(byAdding: .month, value: -(monthCount - 1), to: startOfMonth(for: now)) else { return }
+            let request = Transaction.fetchRequestAll()
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                NSPredicate(format: "direction == %@", "income"),
+                NSPredicate(format: "date >= %@", windowStart as NSDate)
+            ])
+            do {
+                let results = try context.fetch(request)
+                let models = results.map(TransactionModel.init)
+                for model in models {
+                    let bucketDate = startOfMonth(for: model.date)
+                    buckets[bucketDate, default: .zero] += model.convertedAmountBase
+                }
+            } catch {
+                assertionFailure("Failed to fetch income progress: \(error)")
+            }
+        }
+
+        let calendar = Calendar.current
+        let start = startOfMonth(for: Date())
+        return (0..<monthCount).compactMap { offset in
+            guard let month = calendar.date(byAdding: .month, value: -(monthCount - 1 - offset), to: start) else { return nil }
+            let normalizedMonth = startOfMonth(for: month)
+            let amount = buckets[normalizedMonth] ?? .zero
+            return IncomeProgressEntry(monthStart: normalizedMonth, amount: amount)
+        }
+    }
+
+    private func startOfMonth(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return calendar.date(from: components) ?? date
+    }
+
     private static func groupTransactions(_ transactions: [TransactionModel]) -> [TransactionSection] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: transactions) { transaction in
@@ -128,7 +249,7 @@ final class TransactionsStore: ObservableObject {
         return grouped
             .map { key, values in
                 let total = values.reduce(Decimal.zero) { partialResult, transaction in
-                    partialResult + transaction.amount
+                    partialResult + transaction.signedBaseAmount
                 }
                 return TransactionSection(id: key, date: key, transactions: values, total: total)
             }

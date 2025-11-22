@@ -82,10 +82,10 @@ struct TransactionsView: View {
     private var summaryHeader: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                SummaryTile(title: "This Month", amount: viewModel.currentMonthTotal, color: .blue)
-                SummaryTile(title: "Last Month", amount: viewModel.previousMonthTotal, color: .gray)
-                SummaryTile(title: "Income", amount: viewModel.currentIncomeTotal, color: .green)
-                SummaryTile(title: "Expenses", amount: viewModel.currentExpenseTotal, color: .red)
+                SummaryTile(title: "This Month", amount: viewModel.currentMonthTotal, color: .blue, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+                SummaryTile(title: "Last Month", amount: viewModel.previousMonthTotal, color: .gray, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+                SummaryTile(title: "Income", amount: viewModel.currentIncomeTotal, color: .green, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+                SummaryTile(title: "Expenses", amount: viewModel.currentExpenseTotal, color: .red, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -127,6 +127,7 @@ private struct SummaryTile: View {
     let title: String
     let amount: Decimal
     let color: Color
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -143,7 +144,7 @@ private struct SummaryTile: View {
     private func format(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
+        formatter.currencyCode = currencyCode
         return formatter.string(from: value as NSNumber) ?? "--"
     }
 }

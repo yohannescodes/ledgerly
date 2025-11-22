@@ -1,19 +1,17 @@
 import SwiftUI
 
-/// Multi-step onboarding that matches the PRD: welcome → currency → exchange mode → cloud sync → summary.
+/// Multi-step onboarding that matches the PRD: welcome → currency → exchange mode → summary.
 struct OnboardingView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
 
     @State private var currentStep: OnboardingStep = .welcome
     @State private var selectedCurrency: String
     @State private var selectedExchangeMode: ExchangeMode
-    @State private var cloudSyncEnabled: Bool
     @State private var isSaving = false
 
     init(initialSnapshot: AppSettingsSnapshot) {
         _selectedCurrency = State(initialValue: initialSnapshot.baseCurrencyCode)
         _selectedExchangeMode = State(initialValue: initialSnapshot.exchangeMode)
-        _cloudSyncEnabled = State(initialValue: initialSnapshot.cloudSyncEnabled)
     }
 
     var body: some View {
@@ -22,8 +20,7 @@ struct OnboardingView: View {
             StepContent(
                 step: currentStep,
                 selectedCurrency: $selectedCurrency,
-                selectedExchangeMode: $selectedExchangeMode,
-                cloudSyncEnabled: $cloudSyncEnabled
+                selectedExchangeMode: $selectedExchangeMode
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -53,7 +50,7 @@ struct OnboardingView: View {
 
     private var canContinue: Bool {
         switch currentStep {
-        case .welcome, .exchangeMode, .cloudSync, .summary:
+        case .welcome, .exchangeMode, .summary:
             return true
         case .currency:
             return !selectedCurrency.trimmingCharacters(in: .whitespaces).isEmpty
@@ -79,7 +76,6 @@ struct OnboardingView: View {
         isSaving = true
         appSettingsStore.updateBaseCurrency(code: selectedCurrency)
         appSettingsStore.updateExchangeMode(selectedExchangeMode)
-        appSettingsStore.toggleCloudSync(cloudSyncEnabled)
         appSettingsStore.markOnboardingComplete()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             isSaving = false
@@ -112,7 +108,6 @@ private struct StepContent: View {
 
     @Binding var selectedCurrency: String
     @Binding var selectedExchangeMode: ExchangeMode
-    @Binding var cloudSyncEnabled: Bool
 
     var body: some View {
         switch step {
@@ -125,13 +120,10 @@ private struct StepContent: View {
             )
         case .exchangeMode:
             ExchangeModeStepView(selectedMode: $selectedExchangeMode)
-        case .cloudSync:
-            CloudSyncStepView(isEnabled: $cloudSyncEnabled)
         case .summary:
             SummaryStepView(
                 currency: selectedCurrency,
-                exchangeMode: selectedExchangeMode,
-                syncEnabled: cloudSyncEnabled
+                exchangeMode: selectedExchangeMode
             )
         }
     }
@@ -198,43 +190,14 @@ private struct ExchangeModeCard: View {
     }
 }
 
-private struct CloudSyncStepView: View {
-    @Binding var isEnabled: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Toggle(isOn: $isEnabled) {
-                VStack(alignment: .leading) {
-                    Text("Sync via iCloud")
-                        .font(.headline)
-                    Text("Keep it local or enable sync later from Settings.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-            .tint(.accentColor)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Label("No third-party servers", systemImage: "shield.checkerboard")
-                Label("Toggle anytime in Settings", systemImage: "gearshape")
-            }
-            .foregroundStyle(.secondary)
-            Spacer()
-        }
-    }
-}
-
 private struct SummaryStepView: View {
     let currency: String
     let exchangeMode: ExchangeMode
-    let syncEnabled: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SummaryRow(title: "Base Currency", value: currency)
             SummaryRow(title: "Exchange Mode", value: exchangeMode.title)
-            SummaryRow(title: "iCloud Sync", value: syncEnabled ? "Enabled" : "Disabled")
             Text("You're ready to add wallets, budgets, and investments.")
                 .foregroundStyle(.secondary)
             Spacer()
@@ -245,14 +208,13 @@ private struct SummaryStepView: View {
 // MARK: Supporting Types
 
 private enum OnboardingStep: Int, CaseIterable {
-    case welcome, currency, exchangeMode, cloudSync, summary
+    case welcome, currency, exchangeMode, summary
 
     var header: String {
         switch self {
         case .welcome: return "Welcome to Ledgerly"
         case .currency: return "Pick a Base Currency"
         case .exchangeMode: return "Exchange Rate Mode"
-        case .cloudSync: return "Choose Sync Preferences"
         case .summary: return "You're All Set"
         }
     }
@@ -262,7 +224,6 @@ private enum OnboardingStep: Int, CaseIterable {
         case .welcome: return "Offline-first, privacy-respecting finance."
         case .currency: return "We normalize dashboards using this currency."
         case .exchangeMode: return "Official, parallel, or manual rates—your choice."
-        case .cloudSync: return "Keep it local or enable iCloud sync."
         case .summary: return "Confirm and start tracking."
         }
     }

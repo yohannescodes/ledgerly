@@ -11,50 +11,55 @@ struct CurrencyPickerView: View {
     @State private var searchText: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let infoText {
-                Text(infoText)
-                    .foregroundStyle(.secondary)
-            }
-            TextField("Search currency", text: $searchText)
-                .textFieldStyle(.roundedBorder)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let infoText {
+                    Text(infoText)
+                        .foregroundStyle(.secondary)
+                }
+                TextField("Search currency", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
 
-            if showSuggestions && !suggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                if showSuggestions && !suggestions.isEmpty {
+                    Text("Popular choices")
+                        .font(.subheadline.bold())
+                    LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(suggestions, id: \.code) { option in
                             Button(action: {
                                 selectedCode = option.code
                                 onSelect?(option.code)
                             }) {
-                                Text(option.code)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(selectedCode == option.code ? Color.accentColor.opacity(0.2) : Color(.systemGray5))
-                                    .clipShape(Capsule())
+                                VStack(spacing: 4) {
+                                    Text(option.code)
+                                        .font(.headline)
+                                    Text(option.name)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(selectedCode == option.code ? Color.accentColor.opacity(0.15) : Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
                         }
                     }
                 }
-            }
 
-            if hasSearchQuery {
-                if filteredOptions.isEmpty {
-                    Text("No currencies match your search.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
+                if hasSearchQuery {
+                    if filteredOptions.isEmpty {
+                        Text("No currencies match your search.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
                             ForEach(filteredOptions, id: \.code) { option in
                                 Button(action: {
                                     selectedCode = option.code
                                     onSelect?(option.code)
                                 }) {
                                     HStack {
-                                        VStack(alignment: .leading) {
+                                        VStack(alignment: .leading, spacing: 2) {
                                             Text(option.name)
                                             Text(option.code)
                                                 .font(.caption)
@@ -69,15 +74,17 @@ struct CurrencyPickerView: View {
                                     .padding(.vertical, 8)
                                 }
                                 .buttonStyle(.plain)
+                                Divider()
                             }
                         }
                     }
+                } else {
+                    Text("Search for a code or currency name to view every option.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            } else {
-                Text("Search for a code or currency name to view the full list.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical)
         }
     }
 
@@ -92,5 +99,9 @@ struct CurrencyPickerView: View {
 
     private var hasSearchQuery: Bool {
         !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var gridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 90), spacing: 12)]
     }
 }

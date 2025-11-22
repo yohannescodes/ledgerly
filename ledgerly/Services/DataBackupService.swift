@@ -60,6 +60,13 @@ struct LedgerlyBackup: Codable {
         let includeInCore: Bool
         let includeInTangible: Bool
         let volatility: Bool
+        let investmentCoinID: String?
+        let investmentSymbol: String?
+        let investmentQuantity: Decimal?
+        let investmentCostPerUnit: Decimal?
+        let marketPrice: Decimal?
+        let marketPriceCurrencyCode: String?
+        let marketPriceUpdatedAt: Date?
     }
 
     struct ManualLiabilityRecord: Codable {
@@ -310,17 +317,24 @@ final class DataBackupService {
 
     private func exportManualAssets(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.ManualAssetRecord] {
         let request: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
-        return try context.fetch(request).map {
+        return try context.fetch(request).map { asset in
             LedgerlyBackup.ManualAssetRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                name: $0.name ?? "",
-                type: $0.type ?? "tangible",
-                value: ($0.value as Decimal?) ?? .zero,
-                currencyCode: $0.currencyCode ?? "USD",
-                valuationDate: $0.valuationDate,
-                includeInCore: $0.includeInCore,
-                includeInTangible: $0.includeInTangible,
-                volatility: $0.volatility
+                identifier: asset.identifier ?? UUID().uuidString,
+                name: asset.name ?? "",
+                type: asset.type ?? "tangible",
+                value: (asset.value as Decimal?) ?? .zero,
+                currencyCode: asset.currencyCode ?? "USD",
+                valuationDate: asset.valuationDate,
+                includeInCore: asset.includeInCore,
+                includeInTangible: asset.includeInTangible,
+                volatility: asset.volatility,
+                investmentCoinID: asset.investmentCoinID,
+                investmentSymbol: asset.investmentSymbol,
+                investmentQuantity: asset.investmentQuantity as Decimal?,
+                investmentCostPerUnit: asset.investmentCostPerUnit as Decimal?,
+                marketPrice: asset.marketPrice as Decimal?,
+                marketPriceCurrencyCode: asset.marketPriceCurrencyCode,
+                marketPriceUpdatedAt: asset.marketPriceUpdatedAt
             )
         }
     }
@@ -549,6 +563,19 @@ final class DataBackupService {
             asset.includeInCore = record.includeInCore
             asset.includeInTangible = record.includeInTangible
             asset.volatility = record.volatility
+            asset.investmentCoinID = record.investmentCoinID
+            asset.investmentSymbol = record.investmentSymbol
+            if let quantity = record.investmentQuantity {
+                asset.investmentQuantity = NSDecimalNumber(decimal: quantity)
+            }
+            if let cost = record.investmentCostPerUnit {
+                asset.investmentCostPerUnit = NSDecimalNumber(decimal: cost)
+            }
+            if let marketPrice = record.marketPrice {
+                asset.marketPrice = NSDecimalNumber(decimal: marketPrice)
+            }
+            asset.marketPriceCurrencyCode = record.marketPriceCurrencyCode
+            asset.marketPriceUpdatedAt = record.marketPriceUpdatedAt
         }
     }
 

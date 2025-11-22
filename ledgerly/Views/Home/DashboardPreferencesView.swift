@@ -4,7 +4,6 @@ struct DashboardPreferencesView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @Environment(\.dismiss) private var dismiss
     @State private var visibleWidgets: [DashboardWidget] = DashboardWidget.defaultOrder
-    @State private var editMode: EditMode = .inactive
     @State private var hasLoaded = false
 
     var body: some View {
@@ -21,6 +20,7 @@ struct DashboardPreferencesView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
                     .onMove(perform: move)
                     .onDelete(perform: delete)
@@ -40,18 +40,16 @@ struct DashboardPreferencesView: View {
                 }
             }
         }
-        .navigationTitle("Dashboard")
+        .navigationTitle("Dashboard Preferences")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                EditButton()
-            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
                     .disabled(!hasChanges)
             }
         }
-        .environment(\.editMode, $editMode)
+        .scrollDismissesKeyboard(.interactively)
+        .environment(\.editMode, .constant(.active))
         .onAppear(perform: sync)
     }
 

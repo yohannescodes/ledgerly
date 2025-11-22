@@ -2,76 +2,84 @@ import SwiftUI
 import Charts
 
 struct NetWorthHistoryCard: View {
-    let snapshots: [NetWorthSnapshotModel]
+    let totals: NetWorthTotals?
     let baseCurrencyCode: String
-    @State private var selectedRange: NetWorthRange = .threeMonths
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Net Worth Trend")
-                        .font(.headline)
-                    if let latest = snapshots.last {
-                        Text(CurrencyFormatter.string(for: latest.netWorth, code: baseCurrencyCode))
-                            .font(.title2.bold())
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                            .layoutPriority(1)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Net Worth Breakdown")
+                    .font(.headline)
                 Spacer()
-                Picker("Range", selection: $selectedRange) {
-                    ForEach(NetWorthRange.allCases) { range in
-                        Text(range.title).tag(range)
+                if let totals {
+                    Text(CurrencyFormatter.string(for: totals.netWorth, code: baseCurrencyCode))
+                        .font(.title3.bold())
+                        .foregroundStyle(.primary)
+                }
+            }
+
+            if let totals {
+                let data = segments(for: totals)
+                if data.isEmpty {
+                    Text("Add wallets, investments, or liabilities to see how they shape your net worth.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Chart(data) { segment in
+                        SectorMark(
+                            angle: .value("Amount", segment.doubleValue),
+                            innerRadius: .ratio(0.45),
+                            outerRadius: .ratio(1)
+                        )
+                        .foregroundStyle(segment.color)
+                    }
+                    .frame(height: 220)
+                    .chartLegend(.hidden)
+
+                    ForEach(data) { segment in
+                        HStack {
+                            Circle()
+                                .fill(segment.color)
+                                .frame(width: 10, height: 10)
+                            Text(segment.label)
+                            Spacer()
+                            Text(CurrencyFormatter.string(for: segment.amount, code: baseCurrencyCode))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
-            }
-            Chart(filteredSnapshots) { snapshot in
-                LineMark(
-                    x: .value("Date", snapshot.timestamp),
-                        y: .value("Net Worth", doubleValue(snapshot.netWorth))
-                )
-                AreaMark(
-                    x: .value("Date", snapshot.timestamp),
-                    y: .value("Net Worth", doubleValue(snapshot.netWorth))
-                )
-                .foregroundStyle(Gradient(colors: [.accentColor.opacity(0.4), .clear]))
-
-                if let notes = snapshot.notes, !notes.isEmpty {
-                    PointMark(
-                        x: .value("Date", snapshot.timestamp),
-                        y: .value("Annotation", doubleValue(snapshot.netWorth))
-                    )
-                    .foregroundStyle(.orange)
-                }
-            }
-            .frame(height: 160)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-
-            NavigationLink {
-                NetWorthAnalyticsView(initialRange: selectedRange)
-            } label: {
-                HStack(spacing: 6) {
-                    Text("Open Analytics")
-                    Image(systemName: "arrow.right")
-                        .imageScale(.small)
-                }
-                .font(.subheadline.weight(.semibold))
+            } else {
+                Text("Add wallets, investments, or liabilities to see how they shape your net worth.")
+                    .foregroundStyle(.secondary)
             }
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
     }
 
-    private var filteredSnapshots: [NetWorthSnapshotModel] {
-        selectedRange.filter(snapshots: snapshots)
+    private func segments(for totals: NetWorthTotals) -> [NetWorthSegment] {
+        let liabilityAmount: Decimal
+        if totals.totalLiabilities < 0 {
+            liabilityAmount = -totals.totalLiabilities
+        } else {
+            liabilityAmount = totals.totalLiabilities
+        }
+        return [
+            NetWorthSegment(label: "Assets", amount: totals.manualAssets, color: .blue.opacity(0.8)),
+            NetWorthSegment(label: "Investments", amount: totals.totalInvestments, color: .purple.opacity(0.8)),
+            NetWorthSegment(label: "Wallets", amount: totals.walletAssets, color: .green.opacity(0.8)),
+            NetWorthSegment(label: "Receivables", amount: totals.receivables, color: .orange.opacity(0.8)),
+            NetWorthSegment(label: "Liabilities", amount: liabilityAmount, color: .red.opacity(0.8))
+        ]
+        .filter { $0.amount > 0 }
     }
+}
 
-    private func doubleValue(_ value: Decimal) -> Double {
-        NSDecimalNumber(decimal: value).doubleValue
-    }
+private struct NetWorthSegment: Identifiable {
+    let id = UUID()
+    let label: String
+    let amount: Decimal
+    let color: Color
+
+    var doubleValue: Double { NSDecimalNumber(decimal: amount).doubleValue }
 }

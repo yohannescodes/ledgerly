@@ -10,19 +10,11 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @EnvironmentObject private var transactionsStore: TransactionsStore
-    @EnvironmentObject private var investmentsStore: InvestmentsStore
-    @EnvironmentObject private var budgetsStore: BudgetsStore
-    @EnvironmentObject private var goalsStore: GoalsStore
 
     var body: some View {
         Group {
             if appSettingsStore.snapshot.hasCompletedOnboarding {
-                MainTabView(
-                    transactionsStore: transactionsStore,
-                    investmentsStore: investmentsStore,
-                    budgetsStore: budgetsStore,
-                    goalsStore: goalsStore
-                )
+                MainTabView(transactionsStore: transactionsStore)
             } else {
                 OnboardingView(initialSnapshot: appSettingsStore.snapshot)
             }

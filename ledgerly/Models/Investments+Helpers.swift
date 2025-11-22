@@ -76,6 +76,13 @@ struct ManualAssetModel: Identifiable, Hashable {
     let includeInCore: Bool
     let includeInTangible: Bool
     let volatility: Bool
+    let investmentCoinID: String?
+    let investmentSymbol: String?
+    let investmentQuantity: Decimal
+    let investmentCostPerUnit: Decimal
+    let marketPrice: Decimal?
+    let marketPriceCurrencyCode: String?
+    let marketPriceUpdatedAt: Date?
 }
 
 struct ManualLiabilityModel: Identifiable, Hashable {
@@ -211,6 +218,13 @@ extension ManualAssetModel {
         includeInCore = managedObject.includeInCore
         includeInTangible = managedObject.includeInTangible
         volatility = managedObject.volatility
+        investmentCoinID = managedObject.investmentCoinID
+        investmentSymbol = managedObject.investmentSymbol
+        investmentQuantity = managedObject.investmentQuantity as Decimal? ?? .zero
+        investmentCostPerUnit = managedObject.investmentCostPerUnit as Decimal? ?? .zero
+        marketPrice = managedObject.marketPrice as Decimal?
+        marketPriceCurrencyCode = managedObject.marketPriceCurrencyCode
+        marketPriceUpdatedAt = managedObject.marketPriceUpdatedAt
     }
 }
 
@@ -380,7 +394,13 @@ extension ManualAsset {
         currencyCode: String,
         includeInCore: Bool = true,
         includeInTangible: Bool = true,
-        volatility: Bool = false
+        volatility: Bool = false,
+        investmentCoinID: String? = nil,
+        investmentSymbol: String? = nil,
+        investmentQuantity: Decimal? = nil,
+        investmentCostPerUnit: Decimal? = nil,
+        marketPrice: Decimal? = nil,
+        marketPriceCurrencyCode: String? = nil
     ) -> ManualAsset {
         let asset = ManualAsset(context: context)
         asset.identifier = UUID().uuidString
@@ -392,6 +412,18 @@ extension ManualAsset {
         asset.includeInCore = includeInCore
         asset.includeInTangible = includeInTangible
         asset.volatility = volatility
+        asset.investmentCoinID = investmentCoinID
+        asset.investmentSymbol = investmentSymbol
+        if let investmentQuantity {
+            asset.investmentQuantity = NSDecimalNumber(decimal: investmentQuantity)
+        }
+        if let investmentCostPerUnit {
+            asset.investmentCostPerUnit = NSDecimalNumber(decimal: investmentCostPerUnit)
+        }
+        if let marketPrice {
+            asset.marketPrice = NSDecimalNumber(decimal: marketPrice)
+        }
+        asset.marketPriceCurrencyCode = marketPriceCurrencyCode
         return asset
     }
 }

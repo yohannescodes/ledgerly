@@ -38,13 +38,6 @@ struct SettingsDebugView: View {
         )
     }
 
-    private var cloudSyncBinding: Binding<Bool> {
-        Binding(
-            get: { appSettingsStore.snapshot.cloudSyncEnabled },
-            set: { appSettingsStore.toggleCloudSync($0) }
-        )
-    }
-
     var body: some View {
         Form {
             Section(header: Text("Profile"), footer: Text("Future versions will let you edit onboarding settings here.")) {
@@ -62,7 +55,6 @@ struct SettingsDebugView: View {
                     }
                 }
 
-                Toggle("iCloud Sync", isOn: cloudSyncBinding)
                 Toggle("Notifications", isOn: Binding(
                     get: { appSettingsStore.snapshot.notificationsEnabled },
                     set: { appSettingsStore.updateNotifications($0) }
