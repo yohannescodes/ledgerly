@@ -6,6 +6,7 @@ struct BudgetAlertPayload {
     let categoryName: String
     let threshold: Int
     let spentAmount: Decimal
+    let budgetID: NSManagedObjectID?
 }
 
 final class BudgetAlertService {

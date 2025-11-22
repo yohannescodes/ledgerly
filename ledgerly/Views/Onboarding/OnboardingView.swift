@@ -386,7 +386,8 @@ private struct SummaryRow: View {
             cloudSyncEnabled: false,
             hasCompletedOnboarding: false,
             priceRefreshIntervalMinutes: 30,
-            notificationsEnabled: true
+            notificationsEnabled: true,
+            dashboardWidgets: DashboardWidget.defaultOrder
         )
     )
     .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))

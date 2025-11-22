@@ -85,7 +85,14 @@ final class BudgetsStore: ObservableObject {
             alert.spentAmount = NSDecimalNumber(decimal: spent)
             alert.budget = budget
             if settings?.notificationsEnabled ?? true {
-                BudgetAlertService().scheduleAlert(payload: .init(categoryName: budget.category?.name ?? "Budget", threshold: Int(threshold.value * 100), spentAmount: spent))
+                BudgetAlertService().scheduleAlert(
+                    payload: .init(
+                        categoryName: budget.category?.name ?? "Budget",
+                        threshold: Int(threshold.value * 100),
+                        spentAmount: spent,
+                        budgetID: budget.objectID
+                    )
+                )
             }
         }
     }

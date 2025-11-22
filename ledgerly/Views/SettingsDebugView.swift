@@ -1,7 +1,25 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsDebugView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @EnvironmentObject private var netWorthStore: NetWorthStore
+    @EnvironmentObject private var walletsStore: WalletsStore
+    @EnvironmentObject private var budgetsStore: BudgetsStore
+    @EnvironmentObject private var goalsStore: GoalsStore
+    @EnvironmentObject private var investmentsStore: InvestmentsStore
+
+    private let exportService: DataExportService
+    private let backupService: DataBackupService
+
+    @State private var exportedFile: ExportedFile?
+    @State private var showingImporter = false
+    @State private var alertMessage: String?
+
+    init(persistence: PersistenceController = PersistenceController.shared) {
+        self.exportService = DataExportService(persistence: persistence)
+        self.backupService = DataBackupService(persistence: persistence)
+    }
 
     private var baseCurrencyBinding: Binding<String> {
         Binding(
@@ -49,11 +67,100 @@ struct SettingsDebugView: View {
                 Text("Onboarding Completed: \(appSettingsStore.snapshot.hasCompletedOnboarding ? "Yes" : "No")")
                     .foregroundStyle(.secondary)
             }
+
+            Section("Dashboard") {
+                NavigationLink {
+                    DashboardPreferencesView()
+                } label: {
+                    Label("Customize Home Widgets", systemImage: "rectangle.on.rectangle.angled")
+                }
+            }
+
+            Section("Data Export") {
+                ForEach(CSVExportKind.allCases) { kind in
+                    Button(action: { exportCSV(kind) }) {
+                        Label("Export \(kind.title) CSV", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+
+            Section("Backup & Restore") {
+                Button(action: exportBackup) {
+                    Label("Export Full Backup", systemImage: "externaldrive")
+                }
+                Button(action: { showingImporter = true }) {
+                    Label("Import Backup", systemImage: "arrow.down.doc")
+                }
+            }
         }
+        .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
+            handleImport(result: result)
+        }
+        .sheet(item: $exportedFile) { payload in
+            ShareSheet(activityItems: [payload.url])
+        }
+        .alert("Data Management", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button("OK", role: .cancel) { alertMessage = nil }
+        } message: {
+            Text(alertMessage ?? "")
+        }
+    }
+
+    private func exportCSV(_ kind: CSVExportKind) {
+        do {
+            let url = try exportService.export(kind: kind)
+            exportedFile = ExportedFile(url: url)
+        } catch {
+            alertMessage = "Failed to export \(kind.title)."
+        }
+    }
+
+    private func exportBackup() {
+        do {
+            let url = try backupService.exportBackup()
+            exportedFile = ExportedFile(url: url)
+        } catch {
+            alertMessage = "Unable to build backup."
+        }
+    }
+
+    private func handleImport(result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            do {
+                try backupService.importBackup(from: url)
+                refreshStoresAfterImport()
+                alertMessage = "Backup imported successfully."
+            } catch {
+                alertMessage = "Failed to import backup."
+            }
+        case .failure(let error):
+            if let cocoa = error as? CocoaError, cocoa.code == .userCancelled { return }
+            alertMessage = "Could not read selected file."
+        }
+    }
+
+    private func refreshStoresAfterImport() {
+        walletsStore.reload()
+        budgetsStore.reload()
+        goalsStore.reload()
+        investmentsStore.reload()
+        netWorthStore.reload()
+        appSettingsStore.refresh()
     }
 }
 
 #Preview {
-    SettingsDebugView()
+    SettingsDebugView(persistence: PersistenceController.preview)
         .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))
+        .environmentObject(NetWorthStore(persistence: PersistenceController.preview))
+        .environmentObject(WalletsStore(persistence: PersistenceController.preview))
+        .environmentObject(BudgetsStore(persistence: PersistenceController.preview))
+        .environmentObject(GoalsStore(persistence: PersistenceController.preview))
+        .environmentObject(InvestmentsStore(persistence: PersistenceController.preview))
+}
+
+private struct ExportedFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }

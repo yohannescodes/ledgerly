@@ -10,6 +10,7 @@ struct AppSettingsSnapshot: Equatable {
     let hasCompletedOnboarding: Bool
     let priceRefreshIntervalMinutes: Int
     let notificationsEnabled: Bool
+    let dashboardWidgets: [DashboardWidget]
 }
 
 enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
@@ -100,6 +101,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    func updateDashboardWidgets(_ widgets: [DashboardWidget]) {
+        performMutation { settings in
+            settings.dashboardWidgets = DashboardWidgetStorage.encode(widgets)
+        }
+    }
+
     private func performMutation(_ block: @escaping (AppSettings) -> Void) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -128,5 +135,6 @@ private extension AppSettingsSnapshot {
         hasCompletedOnboarding = managedObject.hasCompletedOnboarding
         priceRefreshIntervalMinutes = Int(managedObject.priceRefreshIntervalMinutes)
         notificationsEnabled = managedObject.notificationsEnabled
+        dashboardWidgets = DashboardWidgetStorage.decode(managedObject.dashboardWidgets)
     }
 }

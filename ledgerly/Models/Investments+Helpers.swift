@@ -96,6 +96,7 @@ struct NetWorthSnapshotModel: Identifiable, Hashable {
     let coreNetWorth: Decimal
     let tangibleNetWorth: Decimal
     let volatileAssets: Decimal
+    let notes: String?
 }
 
 extension InvestmentAccountModel {
@@ -223,6 +224,7 @@ extension NetWorthSnapshotModel {
         coreNetWorth = managedObject.coreNetWorth as Decimal? ?? .zero
         tangibleNetWorth = managedObject.tangibleNetWorth as Decimal? ?? .zero
         volatileAssets = managedObject.volatileAssets as Decimal? ?? .zero
+        notes = managedObject.notes
     }
 }
 
@@ -385,7 +387,8 @@ extension NetWorthSnapshot {
         totalLiabilities: Decimal,
         coreNetWorth: Decimal,
         tangibleNetWorth: Decimal,
-        volatileAssets: Decimal
+        volatileAssets: Decimal,
+        notes: String? = nil
     ) -> NetWorthSnapshot {
         let snapshot = NetWorthSnapshot(context: context)
         snapshot.identifier = UUID().uuidString
@@ -395,6 +398,7 @@ extension NetWorthSnapshot {
         snapshot.coreNetWorth = NSDecimalNumber(decimal: coreNetWorth)
         snapshot.tangibleNetWorth = NSDecimalNumber(decimal: tangibleNetWorth)
         snapshot.volatileAssets = NSDecimalNumber(decimal: volatileAssets)
+        snapshot.notes = notes
         return snapshot
     }
 }

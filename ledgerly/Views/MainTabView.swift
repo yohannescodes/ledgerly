@@ -10,7 +10,6 @@ struct MainTabView: View {
         TabView {
             NavigationStack {
                 HomeOverviewView()
-                    .navigationTitle("Home")
             }
             .tabItem {
                 Label("Home", systemImage: "house")
@@ -18,7 +17,6 @@ struct MainTabView: View {
 
             NavigationStack {
                 TransactionsView(store: transactionsStore)
-                    .navigationTitle("Transactions")
             }
             .tabItem {
                 Label("Transactions", systemImage: "list.bullet.rectangle")
@@ -50,7 +48,6 @@ struct MainTabView: View {
 
             NavigationStack {
                 SettingsDebugView()
-                    .navigationTitle("Settings")
             }
             .tabItem {
                 Label("Settings", systemImage: "gear")
