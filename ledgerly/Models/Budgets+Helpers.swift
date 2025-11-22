@@ -80,6 +80,7 @@ extension SavingGoal {
         name: String,
         target: Decimal,
         currencyCode: String,
+        deadline: Date,
         linkedWallet: Wallet?,
         linkedCategory: Category?
     ) -> SavingGoal {
@@ -89,7 +90,7 @@ extension SavingGoal {
         goal.targetAmount = NSDecimalNumber(decimal: target)
         goal.currencyCode = currencyCode
         goal.currentAmount = 0
-        goal.deadline = Calendar.current.date(byAdding: .month, value: 6, to: Date())
+        goal.deadline = deadline
         goal.status = "active"
         goal.wallet = linkedWallet
         goal.category = linkedCategory

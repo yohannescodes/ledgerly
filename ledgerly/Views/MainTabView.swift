@@ -8,57 +8,25 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
-            NavigationStack {
-                HomeOverviewView()
-            }
-            .tabItem {
-                Label("Home", systemImage: "house")
-            }
+            NavigationStack { HomeOverviewView() }
+                .tabItem { Label("Home", systemImage: "house") }
 
-            NavigationStack {
-                WalletsView()
-            }
-            .tabItem {
-                Label("Wallets", systemImage: "wallet.pass")
-            }
+            NavigationStack { WalletsView() }
+                .tabItem { Label("Wallets", systemImage: "wallet.pass") }
 
-            NavigationStack {
-                TransactionsView(store: transactionsStore)
-            }
-            .tabItem {
-                Label("Transactions", systemImage: "list.bullet.rectangle")
-            }
+            NavigationStack { TransactionsView(store: transactionsStore) }
+                .tabItem { Label("Transactions", systemImage: "list.bullet.rectangle") }
 
             NavigationStack {
                 InvestmentsView()
                     .environmentObject(investmentsStore)
             }
-            .tabItem {
-                Label("Investments", systemImage: "chart.line.uptrend.xyaxis")
-            }
+            .tabItem { Label("Investments", systemImage: "chart.line.uptrend.xyaxis") }
 
             NavigationStack {
-                BudgetsView()
-                    .environmentObject(budgetsStore)
+                MoreHubView()
             }
-            .tabItem {
-                Label("Budgets", systemImage: "chart.pie.fill")
-            }
-
-            NavigationStack {
-                GoalsView()
-                    .environmentObject(goalsStore)
-            }
-            .tabItem {
-                Label("Goals", systemImage: "target")
-            }
-
-            NavigationStack {
-                SettingsDebugView()
-            }
-            .tabItem {
-                Label("Settings", systemImage: "gear")
-            }
+            .tabItem { Label("More", systemImage: "ellipsis.circle") }
         }
     }
 }

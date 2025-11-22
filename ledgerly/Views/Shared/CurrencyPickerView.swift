@@ -39,41 +39,58 @@ struct CurrencyPickerView: View {
                 }
             }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(filteredOptions, id: \.code) { option in
-                        Button(action: {
-                            selectedCode = option.code
-                            onSelect?(option.code)
-                        }) {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(option.name)
-                                    Text(option.code)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+            if hasSearchQuery {
+                if filteredOptions.isEmpty {
+                    Text("No currencies match your search.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(filteredOptions, id: \.code) { option in
+                                Button(action: {
+                                    selectedCode = option.code
+                                    onSelect?(option.code)
+                                }) {
+                                    HStack {
+                                        VStack(alignment: .leading) {
+                                            Text(option.name)
+                                            Text(option.code)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        if selectedCode == option.code {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(Color.accentColor)
+                                        }
+                                    }
+                                    .padding(.vertical, 8)
                                 }
-                                Spacer()
-                                if selectedCode == option.code {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
-                                }
+                                .buttonStyle(.plain)
                             }
-                            .padding(.vertical, 8)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
+            } else {
+                Text("Search for a code or currency name to view the full list.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private var filteredOptions: [CurrencyOption] {
         let trimmed = searchText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return options }
+        guard !trimmed.isEmpty else { return [] }
         return options.filter { option in
             option.code.localizedCaseInsensitiveContains(trimmed) ||
             option.name.localizedCaseInsensitiveContains(trimmed)
         }
+    }
+
+    private var hasSearchQuery: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 }

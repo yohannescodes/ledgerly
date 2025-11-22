@@ -10,7 +10,6 @@ struct SettingsDebugView: View {
     @EnvironmentObject private var goalsStore: GoalsStore
     @EnvironmentObject private var investmentsStore: InvestmentsStore
 
-    private let exportService: DataExportService
     private let backupService: DataBackupService
 
     @State private var exportedFile: ExportedFile?
@@ -22,7 +21,6 @@ struct SettingsDebugView: View {
     @State private var isEditingRate = false
 
     init(persistence: PersistenceController = PersistenceController.shared) {
-        self.exportService = DataExportService(persistence: persistence)
         self.backupService = DataBackupService(persistence: persistence)
     }
 
@@ -109,14 +107,6 @@ struct SettingsDebugView: View {
                 }
             }
 
-            Section("Data Export") {
-                ForEach(CSVExportKind.allCases) { kind in
-                    Button(action: { exportCSV(kind) }) {
-                        Label("Export \(kind.title) CSV", systemImage: "square.and.arrow.up")
-                    }
-                }
-            }
-
             Section("Backup & Restore") {
                 Button(action: exportBackup) {
                     Label("Export Full Backup", systemImage: "externaldrive")
@@ -153,15 +143,6 @@ struct SettingsDebugView: View {
             Button("OK", role: .cancel) { alertMessage = nil }
         } message: {
             Text(alertMessage ?? "")
-        }
-    }
-
-    private func exportCSV(_ kind: CSVExportKind) {
-        do {
-            let url = try exportService.export(kind: kind)
-            exportedFile = ExportedFile(url: url)
-        } catch {
-            alertMessage = "Failed to export \(kind.title)."
         }
     }
 
