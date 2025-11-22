@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UniformTypeIdentifiers
 
 struct SettingsDebugView: View {
@@ -15,6 +16,10 @@ struct SettingsDebugView: View {
     @State private var exportedFile: ExportedFile?
     @State private var showingImporter = false
     @State private var alertMessage: String?
+    @State private var showingRatePicker = false
+    @State private var pendingRateCode: String? = nil
+    @State private var pendingRateValue: Decimal = 1
+    @State private var isEditingRate = false
 
     init(persistence: PersistenceController = PersistenceController.shared) {
         self.exportService = DataExportService(persistence: persistence)
@@ -76,6 +81,34 @@ struct SettingsDebugView: View {
                 }
             }
 
+            Section("Exchange Rates") {
+                if rateEntries.isEmpty {
+                    Text("Add conversion rates to normalize multi-currency wallets.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(rateEntries, id: \.code) { entry in
+                    Button {
+                        presentRateEditor(code: entry.code, value: entry.value)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(entry.code)
+                                Text("1 \(entry.code) = \(formattedRate(entry.value)) \(appSettingsStore.snapshot.baseCurrencyCode)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(Color.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button(action: { presentRateEditor(code: nil, value: nil) }) {
+                    Label("Add Currency Rate", systemImage: "plus")
+                }
+            }
+
             Section("Data Export") {
                 ForEach(CSVExportKind.allCases) { kind in
                     Button(action: { exportCSV(kind) }) {
@@ -95,6 +128,23 @@ struct SettingsDebugView: View {
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
             handleImport(result: result)
+        }
+        .sheet(isPresented: $showingRatePicker) {
+            ExchangeRateFormView(
+                baseCurrency: appSettingsStore.snapshot.baseCurrencyCode,
+                selectedCurrency: pendingRateCode,
+                rateValue: pendingRateValue,
+                onSave: { code, value in
+                    appSettingsStore.updateExchangeRate(code: code, value: value)
+                    showingRatePicker = false
+                },
+                onDelete: isEditingRate ? {
+                    if let code = pendingRateCode {
+                        appSettingsStore.removeExchangeRate(code: code)
+                    }
+                    showingRatePicker = false
+                } : nil
+            )
         }
         .sheet(item: $exportedFile) { payload in
             ShareSheet(activityItems: [payload.url])
@@ -147,6 +197,26 @@ struct SettingsDebugView: View {
         investmentsStore.reload()
         netWorthStore.reload()
         appSettingsStore.refresh()
+    }
+
+    private var rateEntries: [(code: String, value: Decimal)] {
+        appSettingsStore.snapshot.exchangeRates
+            .sorted { $0.key < $1.key }
+            .map { ($0.key, $0.value) }
+    }
+
+    private func presentRateEditor(code: String?, value: Decimal?) {
+        pendingRateCode = code
+        pendingRateValue = value ?? 1
+        isEditingRate = (code != nil)
+        showingRatePicker = true
+    }
+
+    private func formattedRate(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 6
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "0"
     }
 }
 

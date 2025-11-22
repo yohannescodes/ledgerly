@@ -27,6 +27,7 @@ extension AppSettings {
         settings.notificationsEnabled = true
         settings.priceRefreshIntervalMinutes = 30
         settings.lastUpdated = Date()
+        settings.customExchangeRates = "{}"
         settings.dashboardWidgets = DashboardWidgetStorage.encode(DashboardWidget.defaultOrder)
         return settings
     }

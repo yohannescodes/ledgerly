@@ -17,6 +17,7 @@ struct HomeOverviewView: View {
                         widgetView(for: widget)
                     }
                 }
+                NetWorthFormulaCard(totals: netWorthStore.liveTotals)
                 NavigationLink("Manage Manual Assets & Liabilities") {
                     ManualEntriesView()
                 }
@@ -35,33 +36,56 @@ struct HomeOverviewView: View {
     private func widgetView(for widget: DashboardWidget) -> some View {
         switch widget {
         case .netWorthSummary:
-            NetWorthSummaryCard(totals: netWorthStore.liveTotals)
+            EmptyView()
         case .budgetSummary:
             BudgetSummaryCard()
         case .goalsSummary:
             GoalsSummaryCard()
         case .netWorthHistory:
-            NetWorthHistoryCard(snapshots: netWorthStore.snapshots)
+            NetWorthHistoryCard(snapshots: netWorthStore.displaySnapshots)
         }
     }
 }
 
-private struct NetWorthSummaryCard: View {
+private struct NetWorthFormulaCard: View {
     let totals: NetWorthTotals?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Net Worth")
+            Text("Financial Health")
                 .font(.headline)
+            Text("Total Net Worth = (Assets + Investments + Wallets + Receivables) - Liabilities")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             if let totals {
-                VStack(alignment: .leading, spacing: 8) {
-                    metricRow(title: "Total Assets", value: totals.totalAssets)
-                    metricRow(title: "Total Liabilities", value: totals.totalLiabilities)
-                    metricRow(title: "Core Net Worth", value: totals.coreNetWorth)
-                    metricRow(title: "Tangible Net Worth", value: totals.tangibleNetWorth)
+                Group {
+                    formulaRow(title: "Assets", value: totals.manualAssets)
+                    VStack(alignment: .leading, spacing: 4) {
+                        formulaRow(title: "Investments", value: totals.totalInvestments)
+                        HStack {
+                            Text("   • Stocks")
+                            Spacer()
+                            Text(formatCurrency(totals.stockInvestments))
+                                .font(.caption)
+                        }
+                        HStack {
+                            Text("   • Crypto")
+                            Spacer()
+                            Text(formatCurrency(totals.cryptoInvestments))
+                                .font(.caption)
+                        }
+                    }
+                    formulaRow(title: "Wallets", value: totals.walletAssets)
+                    formulaRow(title: "Receivables", value: totals.receivables)
                 }
+                Divider()
+                formulaRow(title: "Total Assets", value: totals.totalAssets, emphasize: true)
+                formulaRow(title: "Liabilities", value: totals.totalLiabilities)
+                Divider()
+                formulaRow(title: "Net Worth", value: totals.netWorth, emphasize: true)
             } else {
-                Text("No net worth snapshots yet.")
+                Text("Add wallets and assets to see the breakdown.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -70,12 +94,12 @@ private struct NetWorthSummaryCard: View {
         .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
     }
 
-    private func metricRow(title: String, value: Decimal) -> some View {
+    private func formulaRow(title: String, value: Decimal, emphasize: Bool = false) -> some View {
         HStack {
             Text(title)
             Spacer()
             Text(formatCurrency(value))
-                .fontWeight(.semibold)
+                .fontWeight(emphasize ? .bold : .semibold)
         }
     }
 

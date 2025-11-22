@@ -11,6 +11,7 @@ struct AppSettingsSnapshot: Equatable {
     let priceRefreshIntervalMinutes: Int
     let notificationsEnabled: Bool
     let dashboardWidgets: [DashboardWidget]
+    let exchangeRates: [String: Decimal]
 }
 
 enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
@@ -107,6 +108,22 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    func updateExchangeRate(code: String, value: Decimal) {
+        performMutation { settings in
+            var table = ExchangeRateStorage.decode(settings.customExchangeRates)
+            table[code.uppercased()] = value
+            settings.customExchangeRates = ExchangeRateStorage.encode(table)
+        }
+    }
+
+    func removeExchangeRate(code: String) {
+        performMutation { settings in
+            var table = ExchangeRateStorage.decode(settings.customExchangeRates)
+            table.removeValue(forKey: code.uppercased())
+            settings.customExchangeRates = ExchangeRateStorage.encode(table)
+        }
+    }
+
     private func performMutation(_ block: @escaping (AppSettings) -> Void) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -136,5 +153,31 @@ private extension AppSettingsSnapshot {
         priceRefreshIntervalMinutes = Int(managedObject.priceRefreshIntervalMinutes)
         notificationsEnabled = managedObject.notificationsEnabled
         dashboardWidgets = DashboardWidgetStorage.decode(managedObject.dashboardWidgets)
+        exchangeRates = ExchangeRateStorage.decode(managedObject.customExchangeRates)
+    }
+}
+
+enum ExchangeRateStorage {
+    static func encode(_ table: [String: Decimal]) -> String {
+        let normalized = table.reduce(into: [String: Double]()) { partial, item in
+            partial[item.key.uppercased()] = NSDecimalNumber(decimal: item.value).doubleValue
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: normalized) else {
+            return "{}"
+        }
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    static func decode(_ stored: String?) -> [String: Decimal] {
+        guard
+            let stored,
+            let data = stored.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Double]
+        else { return [:] }
+        var result: [String: Decimal] = [:]
+        for (code, value) in json {
+            result[code.uppercased()] = Decimal(value)
+        }
+        return result
     }
 }

@@ -8,7 +8,6 @@ struct OnboardingView: View {
     @State private var selectedCurrency: String
     @State private var selectedExchangeMode: ExchangeMode
     @State private var cloudSyncEnabled: Bool
-    @State private var currencySearchText = ""
     @State private var isSaving = false
 
     init(initialSnapshot: AppSettingsSnapshot) {
@@ -23,11 +22,8 @@ struct OnboardingView: View {
             StepContent(
                 step: currentStep,
                 selectedCurrency: $selectedCurrency,
-                currencySearchText: $currencySearchText,
                 selectedExchangeMode: $selectedExchangeMode,
-                cloudSyncEnabled: $cloudSyncEnabled,
-                suggestions: CurrencyDataSource.suggested,
-                allCurrencies: CurrencyDataSource.all
+                cloudSyncEnabled: $cloudSyncEnabled
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -115,23 +111,17 @@ private struct StepContent: View {
     let step: OnboardingStep
 
     @Binding var selectedCurrency: String
-    @Binding var currencySearchText: String
     @Binding var selectedExchangeMode: ExchangeMode
     @Binding var cloudSyncEnabled: Bool
-
-    let suggestions: [CurrencyOption]
-    let allCurrencies: [CurrencyOption]
 
     var body: some View {
         switch step {
         case .welcome:
             WelcomeStepView()
         case .currency:
-            CurrencyStepView(
-                selectedCurrency: $selectedCurrency,
-                searchText: $currencySearchText,
-                suggestions: suggestions,
-                options: filteredCurrencies
+            CurrencyPickerView(
+                selectedCode: $selectedCurrency,
+                infoText: "Choose a base currency for reports. Wallets can still hold any currency."
             )
         case .exchangeMode:
             ExchangeModeStepView(selectedMode: $selectedExchangeMode)
@@ -145,15 +135,6 @@ private struct StepContent: View {
             )
         }
     }
-
-    private var filteredCurrencies: [CurrencyOption] {
-        let trimmed = currencySearchText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return allCurrencies }
-        return allCurrencies.filter { option in
-            option.code.localizedCaseInsensitiveContains(trimmed) ||
-            option.name.localizedCaseInsensitiveContains(trimmed)
-        }
-    }
 }
 
 private struct WelcomeStepView: View {
@@ -164,65 +145,6 @@ private struct WelcomeStepView: View {
             Label("Track salary, cash, bank, and freelance wallets.", systemImage: "wallet.pass")
             Label("Budgeting, investments, and net worth in one place.", systemImage: "chart.line.uptrend.xyaxis")
             Spacer()
-        }
-    }
-}
-
-private struct CurrencyStepView: View {
-    @Binding var selectedCurrency: String
-    @Binding var searchText: String
-
-    let suggestions: [CurrencyOption]
-    let options: [CurrencyOption]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Choose a base currency for reports. Wallets can still hold any currency.")
-                .foregroundStyle(.secondary)
-            TextField("Search currency", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-
-            if !suggestions.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(suggestions, id: \.code) { option in
-                            Button(action: { selectedCurrency = option.code }) {
-                                Text(verbatim: option.code)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(selectedCurrency == option.code ? Color.accentColor.opacity(0.2) : Color(.systemGray5))
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(options, id: \.code) { option in
-                        Button(action: { selectedCurrency = option.code }) {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(verbatim: option.name)
-                                    Text(verbatim: option.code)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if selectedCurrency == option.code {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain)
-                        Divider()
-                    }
-                }
-            }
         }
     }
 }
@@ -387,7 +309,8 @@ private struct SummaryRow: View {
             hasCompletedOnboarding: false,
             priceRefreshIntervalMinutes: 30,
             notificationsEnabled: true,
-            dashboardWidgets: DashboardWidget.defaultOrder
+            dashboardWidgets: DashboardWidget.defaultOrder,
+            exchangeRates: [:]
         )
     )
     .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))

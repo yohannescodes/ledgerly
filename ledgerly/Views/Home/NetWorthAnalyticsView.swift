@@ -23,7 +23,7 @@ struct NetWorthAnalyticsView: View {
         .navigationTitle("Net Worth Analytics")
         .sheet(item: $editingSnapshot) { snapshot in
             NetWorthAnnotationEditor(snapshot: snapshot) { notes in
-                netWorthStore.updateSnapshotNotes(snapshotID: snapshot.id, notes: notes)
+                netWorthStore.updateSnapshotNotes(snapshot: snapshot, notes: notes)
             }
         }
         .onAppear { netWorthStore.reload() }
@@ -58,7 +58,7 @@ struct NetWorthAnalyticsView: View {
                 singlePointChart
                     .frame(height: 120)
             } else {
-                Text(netWorthStore.snapshots.isEmpty ?
+                Text(chartSnapshots.isEmpty ?
                      "No snapshots yet. Capture more history to unlock analytics." :
                         "No snapshots in this range. Try expanding the filter.")
                 .foregroundStyle(.secondary)
@@ -174,8 +174,12 @@ struct NetWorthAnalyticsView: View {
         .buttonStyle(.plain)
     }
 
+    private var chartSnapshots: [NetWorthSnapshotModel] {
+        netWorthStore.displaySnapshots
+    }
+
     private var filteredSnapshots: [NetWorthSnapshotModel] {
-        selectedRange.filter(snapshots: netWorthStore.snapshots)
+        selectedRange.filter(snapshots: chartSnapshots)
     }
 
     private var annotationSnapshots: [NetWorthSnapshotModel] {
@@ -183,7 +187,7 @@ struct NetWorthAnalyticsView: View {
     }
 
     private var annotationList: [NetWorthSnapshotModel] {
-        Array(filteredSnapshots.suffix(12))
+        Array(selectedRange.filter(snapshots: netWorthStore.snapshots).suffix(12))
     }
 
     private var sortedMetrics: [NetWorthMetric] {
@@ -192,7 +196,7 @@ struct NetWorthAnalyticsView: View {
     }
 
     private var latestSnapshot: NetWorthSnapshotModel? {
-        filteredSnapshots.last ?? netWorthStore.snapshots.last
+        filteredSnapshots.last ?? chartSnapshots.last
     }
 
     private var changeSummary: String? {

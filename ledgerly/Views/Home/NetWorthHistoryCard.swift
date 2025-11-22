@@ -12,8 +12,11 @@ struct NetWorthHistoryCard: View {
                     Text("Net Worth Trend")
                         .font(.headline)
                     if let latest = snapshots.last {
-                        Text(formatCurrency(latest.coreNetWorth))
+                        Text(formatCurrency(latest.netWorth))
                             .font(.title2.bold())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .layoutPriority(1)
                     }
                 }
                 Spacer()
@@ -28,18 +31,18 @@ struct NetWorthHistoryCard: View {
             Chart(filteredSnapshots) { snapshot in
                 LineMark(
                     x: .value("Date", snapshot.timestamp),
-                    y: .value("Core", doubleValue(snapshot.coreNetWorth))
+                    y: .value("Net Worth", doubleValue(snapshot.netWorth))
                 )
                 AreaMark(
                     x: .value("Date", snapshot.timestamp),
-                    y: .value("Core", doubleValue(snapshot.coreNetWorth))
+                    y: .value("Net Worth", doubleValue(snapshot.netWorth))
                 )
                 .foregroundStyle(Gradient(colors: [.accentColor.opacity(0.4), .clear]))
 
                 if let notes = snapshot.notes, !notes.isEmpty {
                     PointMark(
                         x: .value("Date", snapshot.timestamp),
-                        y: .value("Annotation", doubleValue(snapshot.coreNetWorth))
+                        y: .value("Annotation", doubleValue(snapshot.netWorth))
                     )
                     .foregroundStyle(.orange)
                 }

@@ -16,6 +16,13 @@ struct MainTabView: View {
             }
 
             NavigationStack {
+                WalletsView()
+            }
+            .tabItem {
+                Label("Wallets", systemImage: "wallet.pass")
+            }
+
+            NavigationStack {
                 TransactionsView(store: transactionsStore)
             }
             .tabItem {

@@ -8,14 +8,20 @@ final class NetWorthStore: ObservableObject {
     @Published private(set) var latestSnapshot: NetWorthSnapshotModel?
     @Published private(set) var snapshots: [NetWorthSnapshotModel] = []
     @Published private(set) var liveTotals: NetWorthTotals?
+    @Published private(set) var displaySnapshots: [NetWorthSnapshotModel] = []
 
     private let persistence: PersistenceController
     private let service: NetWorthService
+    private var cancellables = Set<AnyCancellable>()
 
     init(persistence: PersistenceController) {
         self.persistence = persistence
         self.service = NetWorthService(persistence: persistence)
         reload()
+        NotificationCenter.default.publisher(for: .walletsDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.reload() }
+            .store(in: &cancellables)
     }
 
     func reload() {
@@ -29,19 +35,22 @@ final class NetWorthStore: ObservableObject {
             let models = results.map(NetWorthSnapshotModel.init)
             snapshots = models
             latestSnapshot = models.last
+            displaySnapshots = Self.makeDisplaySnapshots(base: models, liveTotals: liveTotals)
         } catch {
             assertionFailure("Failed to load net worth snapshots: \(error)")
             snapshots = []
             latestSnapshot = nil
+            displaySnapshots = Self.makeDisplaySnapshots(base: [], liveTotals: liveTotals)
         }
     }
 
-    func updateSnapshotNotes(snapshotID: NSManagedObjectID, notes: String) {
+    func updateSnapshotNotes(snapshot: NetWorthSnapshotModel, notes: String) {
+        guard let objectID = snapshot.objectID else { return }
         let context = persistence.newBackgroundContext()
         context.perform {
-            guard let snapshot = try? context.existingObject(with: snapshotID) as? NetWorthSnapshot else { return }
+            guard let managedSnapshot = try? context.existingObject(with: objectID) as? NetWorthSnapshot else { return }
             let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            snapshot.notes = trimmed.isEmpty ? nil : trimmed
+            managedSnapshot.notes = trimmed.isEmpty ? nil : trimmed
             do {
                 try context.save()
             } catch {
@@ -49,5 +58,17 @@ final class NetWorthStore: ObservableObject {
             }
             Task { @MainActor in self.reload() }
         }
+    }
+
+    private static func makeDisplaySnapshots(base: [NetWorthSnapshotModel], liveTotals: NetWorthTotals?) -> [NetWorthSnapshotModel] {
+        guard let totals = liveTotals else { return base }
+        var combined = base
+        let liveSnapshot = NetWorthSnapshotModel(timestamp: Date(), totals: totals)
+        if let last = combined.last,
+           Calendar.current.isDate(last.timestamp, equalTo: liveSnapshot.timestamp, toGranularity: .minute) {
+            return combined
+        }
+        combined.append(liveSnapshot)
+        return combined
     }
 }

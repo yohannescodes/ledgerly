@@ -88,7 +88,8 @@ struct ManualLiabilityModel: Identifiable, Hashable {
 }
 
 struct NetWorthSnapshotModel: Identifiable, Hashable {
-    let id: NSManagedObjectID
+    let id: UUID
+    let objectID: NSManagedObjectID?
     let identifier: String
     let timestamp: Date
     let totalAssets: Decimal
@@ -97,6 +98,27 @@ struct NetWorthSnapshotModel: Identifiable, Hashable {
     let tangibleNetWorth: Decimal
     let volatileAssets: Decimal
     let notes: String?
+
+    var netWorth: Decimal { totalAssets - totalLiabilities }
+
+    init(
+        objectID: NSManagedObjectID? = nil,
+        identifier: String = UUID().uuidString,
+        timestamp: Date,
+        totals: NetWorthTotals,
+        notes: String? = nil
+    ) {
+        self.id = UUID()
+        self.objectID = objectID
+        self.identifier = identifier
+        self.timestamp = timestamp
+        self.totalAssets = totals.totalAssets
+        self.totalLiabilities = totals.totalLiabilities
+        self.coreNetWorth = totals.coreNetWorth
+        self.tangibleNetWorth = totals.tangibleNetWorth
+        self.volatileAssets = totals.volatileAssets
+        self.notes = notes
+    }
 }
 
 extension InvestmentAccountModel {
@@ -216,15 +238,28 @@ extension HoldingSaleModel {
 
 extension NetWorthSnapshotModel {
     init(managedObject: NetWorthSnapshot) {
-        id = managedObject.objectID
-        identifier = managedObject.identifier ?? UUID().uuidString
-        timestamp = managedObject.timestamp ?? Date()
-        totalAssets = managedObject.totalAssets as Decimal? ?? .zero
-        totalLiabilities = managedObject.totalLiabilities as Decimal? ?? .zero
-        coreNetWorth = managedObject.coreNetWorth as Decimal? ?? .zero
-        tangibleNetWorth = managedObject.tangibleNetWorth as Decimal? ?? .zero
-        volatileAssets = managedObject.volatileAssets as Decimal? ?? .zero
-        notes = managedObject.notes
+        let totalAssets = managedObject.totalAssets as Decimal? ?? .zero
+        let totalLiabilities = managedObject.totalLiabilities as Decimal? ?? .zero
+        let totals = NetWorthTotals(
+            totalAssets: totalAssets,
+            totalLiabilities: totalLiabilities,
+            netWorth: totalAssets - totalLiabilities,
+            coreNetWorth: managedObject.coreNetWorth as Decimal? ?? .zero,
+            tangibleNetWorth: managedObject.tangibleNetWorth as Decimal? ?? .zero,
+            volatileAssets: managedObject.volatileAssets as Decimal? ?? .zero,
+            walletAssets: .zero,
+            manualAssets: .zero,
+            receivables: .zero,
+            stockInvestments: .zero,
+            cryptoInvestments: .zero
+        )
+        self.init(
+            objectID: managedObject.objectID,
+            identifier: managedObject.identifier ?? UUID().uuidString,
+            timestamp: managedObject.timestamp ?? Date(),
+            totals: totals,
+            notes: managedObject.notes
+        )
     }
 }
 
