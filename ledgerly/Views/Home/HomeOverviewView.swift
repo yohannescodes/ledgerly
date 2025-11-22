@@ -17,7 +17,10 @@ struct HomeOverviewView: View {
                         widgetView(for: widget)
                     }
                 }
-                NetWorthFormulaCard(totals: netWorthStore.liveTotals)
+                NetWorthFormulaCard(
+                    totals: netWorthStore.liveTotals,
+                    baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode
+                )
                 NavigationLink("Manage Manual Assets & Liabilities") {
                     ManualEntriesView()
                 }
@@ -42,13 +45,17 @@ struct HomeOverviewView: View {
         case .goalsSummary:
             GoalsSummaryCard()
         case .netWorthHistory:
-            NetWorthHistoryCard(snapshots: netWorthStore.displaySnapshots)
+            NetWorthHistoryCard(
+                snapshots: netWorthStore.displaySnapshots,
+                baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode
+            )
         }
     }
 }
 
 private struct NetWorthFormulaCard: View {
     let totals: NetWorthTotals?
+    let baseCurrencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -104,10 +111,7 @@ private struct NetWorthFormulaCard: View {
     }
 
     private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
-        return formatter.string(from: value as NSNumber) ?? "--"
+        CurrencyFormatter.string(for: value, code: baseCurrencyCode)
     }
 }
 

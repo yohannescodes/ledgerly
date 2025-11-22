@@ -3,6 +3,7 @@ import Charts
 
 struct NetWorthHistoryCard: View {
     let snapshots: [NetWorthSnapshotModel]
+    let baseCurrencyCode: String
     @State private var selectedRange: NetWorthRange = .threeMonths
 
     var body: some View {
@@ -12,7 +13,7 @@ struct NetWorthHistoryCard: View {
                     Text("Net Worth Trend")
                         .font(.headline)
                     if let latest = snapshots.last {
-                        Text(formatCurrency(latest.netWorth))
+                        Text(CurrencyFormatter.string(for: latest.netWorth, code: baseCurrencyCode))
                             .font(.title2.bold())
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
@@ -31,7 +32,7 @@ struct NetWorthHistoryCard: View {
             Chart(filteredSnapshots) { snapshot in
                 LineMark(
                     x: .value("Date", snapshot.timestamp),
-                    y: .value("Net Worth", doubleValue(snapshot.netWorth))
+                        y: .value("Net Worth", doubleValue(snapshot.netWorth))
                 )
                 AreaMark(
                     x: .value("Date", snapshot.timestamp),
@@ -68,13 +69,6 @@ struct NetWorthHistoryCard: View {
 
     private var filteredSnapshots: [NetWorthSnapshotModel] {
         selectedRange.filter(snapshots: snapshots)
-    }
-
-    private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
-        return formatter.string(from: value as NSNumber) ?? "--"
     }
 
     private func doubleValue(_ value: Decimal) -> Double {

@@ -1,8 +1,10 @@
 import SwiftUI
 import Charts
+import Combine
 
 struct NetWorthAnalyticsView: View {
     @EnvironmentObject private var netWorthStore: NetWorthStore
+    @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @State private var selectedRange: NetWorthRange
     @State private var enabledMetrics: Set<NetWorthMetric> = NetWorthMetric.defaultVisible
     @State private var editingSnapshot: NetWorthSnapshotModel?
@@ -158,7 +160,7 @@ struct NetWorthAnalyticsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(snapshot.timestamp, style: .date)
                         .font(.subheadline)
-                    Text(formatCurrency(snapshot.coreNetWorth))
+                Text(formatCurrency(snapshot.coreNetWorth))
                         .font(.body.weight(.semibold))
                     Text(snapshot.notes?.isEmpty == false ? snapshot.notes! : "Add a note")
                         .font(.footnote)
@@ -228,20 +230,17 @@ struct NetWorthAnalyticsView: View {
     }
 
     private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
-        return formatter.string(from: value as NSNumber) ?? "--"
+        CurrencyFormatter.string(for: value, code: appSettingsStore.snapshot.baseCurrencyCode)
     }
     private func latestSnapshotBreakdown(for snapshot: NetWorthSnapshotModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Latest Snapshot")
                 .font(.headline)
-            MetricRow(title: "Total Assets", value: snapshot.totalAssets)
-            MetricRow(title: "Total Liabilities", value: snapshot.totalLiabilities)
-            MetricRow(title: "Core Net Worth", value: snapshot.coreNetWorth)
-            MetricRow(title: "Tangible Net Worth", value: snapshot.tangibleNetWorth)
-            MetricRow(title: "Volatile Assets", value: snapshot.volatileAssets)
+            MetricRow(title: "Total Assets", value: snapshot.totalAssets, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+            MetricRow(title: "Total Liabilities", value: snapshot.totalLiabilities, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+            MetricRow(title: "Core Net Worth", value: snapshot.coreNetWorth, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+            MetricRow(title: "Tangible Net Worth", value: snapshot.tangibleNetWorth, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+            MetricRow(title: "Volatile Assets", value: snapshot.volatileAssets, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
         }
     }
 
@@ -253,6 +252,7 @@ struct NetWorthAnalyticsView: View {
 private struct MetricRow: View {
     let title: String
     let value: Decimal
+    let currencyCode: String
 
     var body: some View {
         HStack {
@@ -264,10 +264,7 @@ private struct MetricRow: View {
     }
 
     private func formatCurrency(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = Locale.current.currency?.identifier ?? "USD"
-        return formatter.string(from: value as NSNumber) ?? "--"
+        CurrencyFormatter.string(for: value, code: currencyCode)
     }
 }
 
