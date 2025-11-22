@@ -86,6 +86,7 @@
         <attribute name="includeInCore" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="includeInTangible" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="investmentProvider" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="investmentCoinID" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="investmentSymbol" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="investmentQuantity" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>

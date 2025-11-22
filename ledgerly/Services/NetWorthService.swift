@@ -11,11 +11,12 @@ struct NetWorthTotals {
     let volatileAssets: Decimal
     let walletAssets: Decimal
     let manualAssets: Decimal
+    let manualInvestments: Decimal
     let receivables: Decimal
     let stockInvestments: Decimal
     let cryptoInvestments: Decimal
 
-    var totalInvestments: Decimal { stockInvestments + cryptoInvestments }
+    var totalInvestments: Decimal { stockInvestments + cryptoInvestments + manualInvestments }
 }
 
 final class NetWorthService {
@@ -31,7 +32,8 @@ final class NetWorthService {
         var totalAssets: Decimal = .zero
         var totalLiabilities: Decimal = .zero
         var walletAssets: Decimal = .zero
-        var manualAssets: Decimal = .zero
+        var manualAssetsTotal: Decimal = .zero
+        var manualInvestments: Decimal = .zero
         var stockInvestments: Decimal = .zero
         var cryptoInvestments: Decimal = .zero
         var receivables: Decimal = .zero
@@ -41,12 +43,13 @@ final class NetWorthService {
 
         context.performAndWait {
             walletAssets = sumWalletBalances(in: context, converter: converter)
-            manualAssets = sumManualAssets(
+            manualAssetsTotal = sumManualAssets(
                 in: context,
                 core: &coreAssets,
                 tangible: &tangibleAssets,
                 volatile: &volatileAssets,
                 receivables: &receivables,
+                manualInvestments: &manualInvestments,
                 converter: converter
             )
             totalLiabilities += sumManualLiabilities(in: context, converter: converter)
@@ -55,7 +58,8 @@ final class NetWorthService {
             cryptoInvestments = investmentBreakdown.crypto
         }
 
-        totalAssets = walletAssets + manualAssets + stockInvestments + cryptoInvestments
+        let manualAssets = max(manualAssetsTotal - manualInvestments, .zero)
+        totalAssets = walletAssets + manualAssets + manualInvestments + stockInvestments + cryptoInvestments
 
         let coreNetWorth = coreAssets - totalLiabilities
         let tangibleNetWorth = tangibleAssets - totalLiabilities
@@ -69,6 +73,7 @@ final class NetWorthService {
             volatileAssets: volatileAssets,
             walletAssets: walletAssets,
             manualAssets: manualAssets,
+            manualInvestments: manualInvestments,
             receivables: receivables,
             stockInvestments: stockInvestments,
             cryptoInvestments: cryptoInvestments
@@ -109,6 +114,7 @@ final class NetWorthService {
         tangible: inout Decimal,
         volatile: inout Decimal,
         receivables: inout Decimal,
+        manualInvestments: inout Decimal,
         converter: CurrencyConverter
     ) -> Decimal {
         let request: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
@@ -123,8 +129,17 @@ final class NetWorthService {
             if (asset.type?.lowercased().contains("receiv") ?? false) {
                 receivables += value
             }
+            if isManualInvestment(asset: asset) {
+                manualInvestments += value
+            }
         }
         return total
+    }
+
+    private func isManualInvestment(asset: ManualAsset) -> Bool {
+        if let coinID = asset.investmentCoinID, !coinID.isEmpty { return true }
+        if let type = asset.type?.lowercased(), type.contains("investment") { return true }
+        return false
     }
 
     private func sumManualLiabilities(in context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {

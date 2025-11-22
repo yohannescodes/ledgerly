@@ -70,25 +70,6 @@ struct ManualEntriesView: View {
 
             Section("Investments") {
                 if investments.isEmpty {
-                    Text("Log coins, contracts, or other holdings with their purchase cost.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(investments) { investment in
-                    VStack(alignment: .leading) {
-                        Text(investment.name ?? "Investment")
-                        Text(formatCurrency(investment.value as Decimal? ?? .zero, code: investment.currencyCode ?? "USD"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { investmentToEdit = investment }
-                }
-                .onDelete(perform: deleteInvestment)
-                Button("Add Investment", action: { showingInvestmentForm = true })
-            }
-
-            Section("Investments") {
-                if investments.isEmpty {
                     Text("Log coins, contracts, or other holdings with purchase cost. We'll keep prices updated.")
                         .foregroundStyle(.secondary)
                 }
@@ -133,6 +114,7 @@ struct ManualEntriesView: View {
         }
         .sheet(isPresented: $showingInvestmentForm) {
             InvestmentEntryFormView(title: "New Investment", baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode) { entry in
+                let identifier = formattedIdentifier(for: entry)
                 ManualAsset.create(
                     in: context,
                     name: entry.name,
@@ -142,7 +124,8 @@ struct ManualEntriesView: View {
                     includeInCore: true,
                     includeInTangible: false,
                     volatility: true,
-                    investmentCoinID: entry.coinID,
+                    investmentProvider: entry.kind.rawValue,
+                    investmentCoinID: identifier,
                     investmentSymbol: entry.symbol,
                     investmentQuantity: entry.quantity,
                     investmentCostPerUnit: entry.costPerUnit,
@@ -200,6 +183,7 @@ struct ManualEntriesView: View {
                     title: "Edit Investment",
                     baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
                     entry: ManualInvestmentInput(
+                        kind: (investment.investmentProvider == ManualInvestmentInput.Kind.stock.rawValue) ? .stock : .crypto,
                         name: investment.name ?? "",
                         coinID: investment.investmentCoinID ?? "",
                         symbol: investment.investmentSymbol ?? "",
@@ -208,8 +192,10 @@ struct ManualEntriesView: View {
                         currencyCode: investment.currencyCode ?? appSettingsStore.snapshot.baseCurrencyCode
                     ),
                     onSave: { entry in
+                        let identifier = formattedIdentifier(for: entry)
                         investment.name = entry.name
-                        investment.investmentCoinID = entry.coinID
+                        investment.investmentProvider = entry.kind.rawValue
+                        investment.investmentCoinID = identifier
                         investment.investmentSymbol = entry.symbol
                         investment.investmentQuantity = NSDecimalNumber(decimal: entry.quantity)
                         investment.investmentCostPerUnit = NSDecimalNumber(decimal: entry.costPerUnit)
@@ -280,6 +266,15 @@ struct ManualEntriesView: View {
         offsets.map { investments[$0] }.forEach(context.delete)
         try? context.save()
         netWorthStore.reload()
+    }
+
+    private func formattedIdentifier(for entry: ManualInvestmentInput) -> String {
+        switch entry.kind {
+        case .crypto:
+            return entry.coinID.lowercased()
+        case .stock:
+            return entry.coinID.uppercased()
+        }
     }
 
     private func investmentRow(for asset: ManualAsset) -> some View {
@@ -354,6 +349,20 @@ private struct InvestmentSummary {
 }
 
 struct ManualInvestmentInput {
+    enum Kind: String, CaseIterable, Identifiable {
+        case crypto
+        case stock
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .crypto: return "Crypto"
+            case .stock: return "Stock"
+            }
+        }
+    }
+
+    var kind: Kind
     var name: String
     var coinID: String
     var symbol: String
@@ -362,6 +371,7 @@ struct ManualInvestmentInput {
     var currencyCode: String
 
     init(
+        kind: Kind = .crypto,
         name: String = "",
         coinID: String = "",
         symbol: String = "",
@@ -369,6 +379,7 @@ struct ManualInvestmentInput {
         costPerUnit: Decimal = .zero,
         currencyCode: String
     ) {
+        self.kind = kind
         self.name = name
         self.coinID = coinID
         self.symbol = symbol
@@ -399,12 +410,29 @@ struct InvestmentEntryFormView: View {
         NavigationStack {
             Form {
                 Section("Investment Details") {
+                    Picker("Type", selection: $input.kind) {
+                        ForEach(ManualInvestmentInput.Kind.allCases) { kind in
+                            Text(kind.title).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                     TextField("Name", text: $input.name)
-                    TextField("CoinGecko ID", text: $input.coinID)
-                        .autocapitalization(.none)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField("Ticker / Symbol", text: $input.symbol)
+                    if input.kind == .crypto {
+                        TextField("CoinGecko ID", text: $input.coinID)
+                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        StockTickerSearchField(ticker: $input.coinID) { suggestion in
+                            if input.symbol.isEmpty {
+                                input.symbol = suggestion.ticker.uppercased()
+                            }
+                            if input.name.isEmpty, let name = suggestion.name {
+                                input.name = name
+                            }
+                        }
+                    }
+                    TextField("Display Symbol", text: $input.symbol)
                         .autocapitalization(.allCharacters)
                     DecimalTextField(title: "Units Held", value: $input.quantity)
                     DecimalTextField(title: "Cost per Unit", value: $input.costPerUnit)
@@ -419,7 +447,7 @@ struct InvestmentEntryFormView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("Enter the exact CoinGecko coin ID (e.g., bitcoin, ethereum). Prices refresh in your base currency.")
+                    Text(input.kind == .crypto ? "Enter the exact CoinGecko coin ID (e.g., bitcoin, ethereum). Prices refresh in your base currency." : "Enter the stock ticker exactly as Massive API expects (e.g., AAPL). Prices refresh in your base currency.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -455,5 +483,95 @@ struct InvestmentEntryFormView: View {
     private func save() {
         onSave(input)
         dismiss()
+    }
+}
+
+struct StockTickerSearchField: View {
+    @Binding var ticker: String
+    var onSelect: (MassiveClient.TickerSearchResult) -> Void
+
+    @StateObject private var viewModel = StockSearchViewModel()
+    @State private var suppressNextQueryUpdate = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Ticker", text: $ticker)
+                .autocapitalization(.allCharacters)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .onChange(of: ticker) { newValue in
+                    guard !suppressNextQueryUpdate else {
+                        suppressNextQueryUpdate = false
+                        return
+                    }
+                    viewModel.updateQuery(newValue)
+                }
+
+            if viewModel.isLoading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.7, anchor: .center)
+                    Text("Searching tickers…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let message = viewModel.errorMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            if !viewModel.results.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Matches")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(viewModel.results.indices, id: \.self) { index in
+                        let suggestion = viewModel.results[index]
+                        Button(action: { select(suggestion) }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(suggestion.ticker.uppercased())
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                if let name = suggestion.name {
+                                    Text(name)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if let exchange = suggestion.exchangeDisplay {
+                                    Text(exchange)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        if index < viewModel.results.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .onAppear {
+            viewModel.updateQuery(ticker)
+        }
+        .onDisappear {
+            viewModel.clear()
+        }
+    }
+
+    private func select(_ suggestion: MassiveClient.TickerSearchResult) {
+        suppressNextQueryUpdate = true
+        ticker = suggestion.ticker.uppercased()
+        onSelect(suggestion)
+        viewModel.clear()
     }
 }

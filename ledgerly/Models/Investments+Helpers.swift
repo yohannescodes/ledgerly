@@ -76,6 +76,7 @@ struct ManualAssetModel: Identifiable, Hashable {
     let includeInCore: Bool
     let includeInTangible: Bool
     let volatility: Bool
+    let investmentProvider: String?
     let investmentCoinID: String?
     let investmentSymbol: String?
     let investmentQuantity: Decimal
@@ -218,6 +219,7 @@ extension ManualAssetModel {
         includeInCore = managedObject.includeInCore
         includeInTangible = managedObject.includeInTangible
         volatility = managedObject.volatility
+        investmentProvider = managedObject.investmentProvider
         investmentCoinID = managedObject.investmentCoinID
         investmentSymbol = managedObject.investmentSymbol
         investmentQuantity = managedObject.investmentQuantity as Decimal? ?? .zero
@@ -263,6 +265,7 @@ extension NetWorthSnapshotModel {
             volatileAssets: managedObject.volatileAssets as Decimal? ?? .zero,
             walletAssets: .zero,
             manualAssets: .zero,
+            manualInvestments: .zero,
             receivables: .zero,
             stockInvestments: .zero,
             cryptoInvestments: .zero
@@ -395,6 +398,7 @@ extension ManualAsset {
         includeInCore: Bool = true,
         includeInTangible: Bool = true,
         volatility: Bool = false,
+        investmentProvider: String? = nil,
         investmentCoinID: String? = nil,
         investmentSymbol: String? = nil,
         investmentQuantity: Decimal? = nil,
@@ -412,6 +416,7 @@ extension ManualAsset {
         asset.includeInCore = includeInCore
         asset.includeInTangible = includeInTangible
         asset.volatility = volatility
+        asset.investmentProvider = investmentProvider
         asset.investmentCoinID = investmentCoinID
         asset.investmentSymbol = investmentSymbol
         if let investmentQuantity {

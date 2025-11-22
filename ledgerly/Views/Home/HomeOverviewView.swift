@@ -121,6 +121,7 @@ struct ExpenseBreakdownCard: View {
     @State private var range: Range = .month
     @State private var segments: [ExpenseSegment] = []
     @State private var totals = TransactionsStore.ExpenseTotals(currentTotal: .zero, previousTotal: .zero)
+    @State private var pieAnimationProgress: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -150,7 +151,7 @@ struct ExpenseBreakdownCard: View {
             } else {
                 Chart(segments) { segment in
                     SectorMark(
-                        angle: .value("Amount", segment.amountValue),
+                        angle: .value("Amount", segment.amountValue * Double(pieAnimationProgress)),
                         innerRadius: .ratio(0.45),
                         outerRadius: .ratio(1)
                     )
@@ -158,6 +159,7 @@ struct ExpenseBreakdownCard: View {
                 }
                 .frame(height: 220)
                 .chartLegend(.hidden)
+                .animation(.spring(response: 0.8, dampingFraction: 0.85), value: pieAnimationProgress)
 
                 ForEach(segments) { segment in
                     HStack {
@@ -228,6 +230,18 @@ struct ExpenseBreakdownCard: View {
             return ExpenseSegment(label: entry.label, amount: entry.convertedAmount, color: color)
         }
         segments = mapped
+        restartPieAnimation()
+    }
+
+    private func restartPieAnimation() {
+        guard !segments.isEmpty else {
+            pieAnimationProgress = 0
+            return
+        }
+        pieAnimationProgress = 0
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.85)) {
+            pieAnimationProgress = 1
+        }
     }
 }
 
@@ -244,6 +258,7 @@ struct IncomeProgressCard: View {
     @EnvironmentObject private var transactionsStore: TransactionsStore
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @State private var entries: [TransactionsStore.IncomeProgressEntry] = []
+    @State private var barAnimationProgress: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -265,7 +280,7 @@ struct IncomeProgressCard: View {
                 Chart(entries) { entry in
                     BarMark(
                         x: .value("Month", entry.monthStart, unit: .month),
-                        y: .value("Income", NSDecimalNumber(decimal: entry.amount).doubleValue)
+                        y: .value("Income", NSDecimalNumber(decimal: entry.amount).doubleValue * Double(barAnimationProgress))
                     )
                     .foregroundStyle(Color.green.gradient)
                 }
@@ -277,6 +292,7 @@ struct IncomeProgressCard: View {
                     }
                 }
                 .frame(height: 220)
+                .animation(.spring(response: 0.9, dampingFraction: 0.75), value: barAnimationProgress)
 
                 HStack {
                     Text("Year-to-date")
@@ -299,6 +315,18 @@ struct IncomeProgressCard: View {
 
     private func reload() {
         entries = transactionsStore.fetchMonthlyIncomeProgress()
+        restartBarAnimation()
+    }
+
+    private func restartBarAnimation() {
+        guard !entries.isEmpty else {
+            barAnimationProgress = 0
+            return
+        }
+        barAnimationProgress = 0
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) {
+            barAnimationProgress = 1
+        }
     }
 
     private func formatMonth(_ date: Date) -> String {

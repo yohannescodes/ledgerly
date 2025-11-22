@@ -133,37 +133,54 @@ final class ManualInvestmentPriceService {
 
     private let persistence: PersistenceController
     private let session: URLSession
-    private let apiKey: String?
+    private let coinApiKey: String?
+
+    private enum Provider: String {
+        case crypto
+        case stock
+    }
 
     private init(
         persistence: PersistenceController = .shared,
         session: URLSession = .shared,
-        apiKey: String? = ProcessInfo.processInfo.environment["COINGECKO_API_KEY"] ?? "CG-m6kquXyKfv42izVnmswY7AuM"
+        coinApiKey: String? = ProcessInfo.processInfo.environment["COINGECKO_API_KEY"]
     ) {
         self.persistence = persistence
         self.session = session
-        self.apiKey = apiKey
+        self.coinApiKey = coinApiKey
     }
 
     func refresh(baseCurrency: String) async {
         let descriptors = fetchInvestmentDescriptors()
         guard !descriptors.isEmpty else { return }
-        guard let priceMap = try? await fetchPrices(for: Array(Set(descriptors.map { $0.coinID }))) else { return }
+        let cryptoIDs = Array(Set(descriptors.filter { $0.provider == .crypto }.map { $0.identifier.lowercased() }))
+        let stockIDs = Array(Set(descriptors.filter { $0.provider == .stock }.map { $0.identifier.uppercased() }))
+        print("[ManualInvestmentPriceService] Refreshing crypto: \(cryptoIDs). Stock refresh disabled for: \(stockIDs)")
+        let cryptoQuotes = (try? await fetchCryptoPrices(for: cryptoIDs)) ?? [:]
         let context = persistence.newBackgroundContext()
         await context.perform {
             let converter = CurrencyConverter.fromSettings(in: context)
-            let targetCurrency = baseCurrency
             for descriptor in descriptors {
-                guard let quoteUSD = priceMap[descriptor.coinID.lowercased()],
-                      let asset = try? context.existingObject(with: descriptor.objectID) as? ManualAsset else { continue }
-                let basePrice = converter.convertToBase(Decimal(quoteUSD), currency: "USD")
+                guard let asset = try? context.existingObject(with: descriptor.objectID) as? ManualAsset else { continue }
+                let price: Decimal?
+                switch descriptor.provider {
+                case .crypto:
+                    if let usd = cryptoQuotes[descriptor.identifier.lowercased()] {
+                        price = converter.convertToBase(Decimal(usd), currency: "USD")
+                    } else {
+                        price = nil
+                    }
+                case .stock:
+                    price = nil
+                }
+                guard let basePrice = price else { continue }
                 let quantity = descriptor.quantity
                 let newValue = basePrice * quantity
                 asset.marketPrice = NSDecimalNumber(decimal: basePrice)
-                asset.marketPriceCurrencyCode = targetCurrency
+                asset.marketPriceCurrencyCode = baseCurrency
                 asset.marketPriceUpdatedAt = Date()
                 asset.value = NSDecimalNumber(decimal: newValue)
-                asset.currencyCode = targetCurrency
+                asset.currencyCode = baseCurrency
             }
             try? context.save()
         }
@@ -175,29 +192,35 @@ final class ManualInvestmentPriceService {
         context.performAndWait {
             let request: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
             request.predicate = NSPredicate(format: "type CONTAINS[cd] %@ AND investmentCoinID != nil", "investment")
-            guard let assets = try? context.fetch(request) else { return }
-            results = assets.compactMap { asset in
-                guard let coinID = asset.investmentCoinID,
-                      let quantity = asset.investmentQuantity as Decimal? else { return nil }
-                return InvestmentDescriptor(objectID: asset.objectID, coinID: coinID, quantity: quantity)
+            if let assets = try? context.fetch(request) {
+                results = assets.compactMap { asset in
+                    guard let identifier = asset.investmentCoinID,
+                          let quantity = asset.investmentQuantity as Decimal? else { return nil }
+                    let provider = Provider(rawValue: asset.investmentProvider ?? Provider.crypto.rawValue) ?? .crypto
+                    return InvestmentDescriptor(objectID: asset.objectID, provider: provider, identifier: identifier, quantity: quantity)
+                }
             }
         }
         return results
     }
 
-    private func fetchPrices(for coinIDs: [String]) async throws -> [String: Double] {
-        let ids = coinIDs.map { $0.lowercased() }.joined(separator: ",")
-        guard !ids.isEmpty else { return [:] }
+    private func fetchCryptoPrices(for coinIDs: [String]) async throws -> [String: Double] {
+        guard !coinIDs.isEmpty else { return [:] }
         var components = URLComponents(string: "https://api.coingecko.com/api/v3/simple/price")!
         components.queryItems = [
-            URLQueryItem(name: "ids", value: ids),
+            URLQueryItem(name: "ids", value: coinIDs.joined(separator: ",")),
             URLQueryItem(name: "vs_currencies", value: "usd")
         ]
         var request = URLRequest(url: components.url!)
-        if let apiKey {
-            request.addValue(apiKey, forHTTPHeaderField: "x-cg-demo-api-key")
+        if let coinApiKey {
+            request.addValue(coinApiKey, forHTTPHeaderField: "x-cg-demo-api-key")
         }
-        let (data, _) = try await session.data(for: request)
+        print("[ManualInvestmentPriceService] CoinGecko request: \(request.url?.absoluteString ?? "")")
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse {
+            print("[ManualInvestmentPriceService] CoinGecko status: \(http.statusCode)")
+        }
+        print("[ManualInvestmentPriceService] CoinGecko response bytes: \(data.count)")
         let decoded = try JSONDecoder().decode([String: [String: Double]].self, from: data)
         return decoded.reduce(into: [String: Double]()) { partialResult, pair in
             if let usd = pair.value["usd"] {
@@ -208,7 +231,8 @@ final class ManualInvestmentPriceService {
 
     private struct InvestmentDescriptor {
         let objectID: NSManagedObjectID
-        let coinID: String
+        let provider: Provider
+        let identifier: String
         let quantity: Decimal
     }
 }

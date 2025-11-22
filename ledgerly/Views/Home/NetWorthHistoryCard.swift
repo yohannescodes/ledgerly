@@ -4,6 +4,7 @@ import Charts
 struct NetWorthHistoryCard: View {
     let totals: NetWorthTotals?
     let baseCurrencyCode: String
+    @State private var chartAnimationProgress: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -26,7 +27,7 @@ struct NetWorthHistoryCard: View {
                 } else {
                     Chart(data) { segment in
                         SectorMark(
-                            angle: .value("Amount", segment.doubleValue),
+                            angle: .value("Amount", segment.doubleValue * Double(chartAnimationProgress)),
                             innerRadius: .ratio(0.45),
                             outerRadius: .ratio(1)
                         )
@@ -34,6 +35,7 @@ struct NetWorthHistoryCard: View {
                     }
                     .frame(height: 220)
                     .chartLegend(.hidden)
+                    .animation(.spring(response: 0.8, dampingFraction: 0.8), value: chartAnimationProgress)
 
                     ForEach(data) { segment in
                         HStack {
@@ -55,6 +57,10 @@ struct NetWorthHistoryCard: View {
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .onAppear(perform: triggerAnimation)
+        .onChange(of: totals?.netWorth ?? .zero) { _ in
+            triggerAnimation()
+        }
     }
 
     private func segments(for totals: NetWorthTotals) -> [NetWorthSegment] {
@@ -82,4 +88,17 @@ private struct NetWorthSegment: Identifiable {
     let color: Color
 
     var doubleValue: Double { NSDecimalNumber(decimal: amount).doubleValue }
+}
+
+private extension NetWorthHistoryCard {
+    func triggerAnimation() {
+        guard let totals, !segments(for: totals).isEmpty else {
+            chartAnimationProgress = 0
+            return
+        }
+        chartAnimationProgress = 0
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.85)) {
+            chartAnimationProgress = 1
+        }
+    }
 }
