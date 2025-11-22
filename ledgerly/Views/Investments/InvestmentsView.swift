@@ -4,17 +4,44 @@ struct InvestmentsView: View {
     @EnvironmentObject private var investmentsStore: InvestmentsStore
     @State private var isRefreshing = false
     @State private var refreshError: String?
+    @State private var showingAddAccount = false
 
     var body: some View {
         List {
-            ForEach(investmentsStore.accounts) { account in
-                NavigationLink(destination: InvestmentAccountDetailView(account: account)) {
-                    accountRow(account)
+            if investmentsStore.accounts.isEmpty {
+                Section {
+                    VStack(spacing: 12) {
+                        Text("No investment accounts yet")
+                            .font(.headline)
+                        Text("Tap Add to create your first account and start tracking holdings.")
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 40)
+                }
+            } else {
+                ForEach(investmentsStore.accounts) { account in
+                    NavigationLink(destination: InvestmentAccountDetailView(account: account)) {
+                        InvestmentAccountRow(account: account)
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            investmentsStore.deleteAccount(accountID: account.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
         .navigationTitle("Investments")
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { showingAddAccount = true }) {
+                    Label("Add Account", systemImage: "plus")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: refreshPrices) {
                     if isRefreshing {
@@ -23,6 +50,16 @@ struct InvestmentsView: View {
                         Image(systemName: "arrow.clockwise.circle")
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showingAddAccount) {
+            AddInvestmentAccountView { input in
+                investmentsStore.addAccount(
+                    name: input.name,
+                    institution: input.institution.isEmpty ? nil : input.institution,
+                    type: input.accountType,
+                    currencyCode: input.currencyCode
+                )
             }
         }
         .onAppear(perform: refreshPrices)

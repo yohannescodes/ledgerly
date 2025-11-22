@@ -35,6 +35,29 @@ final class PriceService {
         }
     }
 
+    func refreshPrices(for symbols: [String]) {
+        guard !symbols.isEmpty else { return }
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            let request: NSFetchRequest<InvestmentAsset> = InvestmentAsset.fetchRequest()
+            request.predicate = NSPredicate(format: "symbol IN[cd] %@", symbols)
+            guard let assets = try? context.fetch(request), !assets.isEmpty else { return }
+            let descriptors = assets.map { AssetDescriptor(symbol: $0.symbol ?? "", assetType: $0.assetType ?? "stock") }
+            Task { await self.fetchRemoteQuotes(for: descriptors) }
+            for asset in assets {
+                let newPrice = self.pseudoPrice(for: asset)
+                _ = PriceSnapshot.record(
+                    in: context,
+                    asset: asset,
+                    price: newPrice,
+                    currencyCode: asset.currencyCode ?? "USD",
+                    provider: "local"
+                )
+            }
+            try? context.save()
+        }
+    }
+
     private func shouldUpdate(asset: InvestmentAsset) -> Bool {
         guard let snapshots = asset.snapshots as? Set<PriceSnapshot>,
               let latest = snapshots.sorted(by: { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }).first,

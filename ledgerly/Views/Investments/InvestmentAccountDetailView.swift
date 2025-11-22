@@ -5,6 +5,7 @@ import CoreData
 struct InvestmentAccountDetailView: View {
     let account: InvestmentAccountModel
     @EnvironmentObject private var investmentsStore: InvestmentsStore
+    @EnvironmentObject private var walletsStore: WalletsStore
     @EnvironmentObject private var netWorthStore: NetWorthStore
     @State private var showingAddForm = false
     @State private var showingTransferSheet = false
@@ -27,6 +28,12 @@ struct InvestmentAccountDetailView: View {
                             .swipeActions {
                                 Button("Sell") { lotToSell = lot }
                                     .tint(.blue)
+                                Button(role: .destructive) {
+                                    investmentsStore.deleteHolding(lotID: lot.id)
+                                    netWorthStore.reload()
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         if !lot.sales.isEmpty {
                             SaleHistoryList(sales: lot.sales)
@@ -44,7 +51,7 @@ struct InvestmentAccountDetailView: View {
             }
         }
         .sheet(isPresented: $showingAddForm) {
-            AddHoldingFormView(account: account) { input in
+            AddHoldingView(account: account, wallets: walletsStore.wallets) { input in
                 investmentsStore.addHolding(
                     accountID: account.id,
                     symbol: input.symbol,
@@ -52,7 +59,8 @@ struct InvestmentAccountDetailView: View {
                     assetType: input.assetType,
                     quantity: input.quantity,
                     costPerUnit: input.costPerUnit,
-                    acquiredDate: input.acquiredDate,
+                    acquiredDate: input.date,
+                    currencyCode: input.currencyCode,
                     fundingWalletID: input.walletID
                 )
                 netWorthStore.reload()
@@ -70,6 +78,7 @@ struct InvestmentAccountDetailView: View {
                     quantity: 0,
                     costPerUnit: 0,
                     acquiredDate: Date(),
+                    currencyCode: account.currencyCode,
                     fundingWalletID: walletID
                 )
             }

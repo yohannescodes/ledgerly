@@ -34,6 +34,34 @@ final class InvestmentsStore: ObservableObject {
         reload()
     }
 
+    func addAccount(name: String, institution: String?, type: String, currencyCode: String) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            _ = InvestmentAccount.create(
+                in: context,
+                name: name,
+                institution: institution,
+                accountType: type,
+                currencyCode: currencyCode
+            )
+            try? context.save()
+            Task { @MainActor in self.reload() }
+        }
+    }
+
+    func deleteAccount(accountID: NSManagedObjectID) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let account = try? context.existingObject(with: accountID) else { return }
+            context.delete(account)
+            try? context.save()
+            Task { @MainActor in
+                self.reload()
+                NotificationCenter.default.post(name: .investmentsDidChange, object: nil)
+            }
+        }
+    }
+
     func addHolding(
         accountID: NSManagedObjectID,
         symbol: String,
@@ -42,6 +70,7 @@ final class InvestmentsStore: ObservableObject {
         quantity: Decimal,
         costPerUnit: Decimal,
         acquiredDate: Date,
+        currencyCode: String,
         fundingWalletID: NSManagedObjectID? = nil
     ) {
         let context = persistence.newBackgroundContext()
@@ -51,7 +80,7 @@ final class InvestmentsStore: ObservableObject {
                 symbol: symbol,
                 name: assetName,
                 assetType: assetType,
-                currency: account.currencyCode ?? "USD",
+                currency: currencyCode,
                 in: context
             )
 
@@ -85,7 +114,9 @@ final class InvestmentsStore: ObservableObject {
             try? context.save()
 
             Task { @MainActor in
+                self.priceService.refreshPrices(for: [symbol])
                 self.reload()
+                NotificationCenter.default.post(name: .investmentsDidChange, object: nil)
             }
         }
     }
@@ -144,6 +175,20 @@ final class InvestmentsStore: ObservableObject {
 
             Task { @MainActor in
                 self.reload()
+                NotificationCenter.default.post(name: .investmentsDidChange, object: nil)
+            }
+        }
+    }
+
+    func deleteHolding(lotID: NSManagedObjectID) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let lot = try? context.existingObject(with: lotID) else { return }
+            context.delete(lot)
+            try? context.save()
+            Task { @MainActor in
+                self.reload()
+                NotificationCenter.default.post(name: .investmentsDidChange, object: nil)
             }
         }
     }
