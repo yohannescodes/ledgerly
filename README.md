@@ -88,12 +88,27 @@ Ledgerly is designed to be privacy-first and extremely transparent—every chang
 
 ### Dashboard
 The dashboard provides a quick overview of your financial health: Net Worth Breakdown, income progress, and expense breakdown.
-
+### Dashboard
+Your dashboard gives a snapshot of your financial health, including net worth breakdown and summary metrics.
 <p align="center">
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.38.png" alt="Dashboard – Net Worth Breakdown" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.16.png" alt="Dashboard – Net Worth Breakdown" width="250"/>
+</p>
+
+### Financial Insights
+Budget screens help you track spending against limits and progress towards goals.
+<p align="center">
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.12.png" alt="Financial Insights – Budgets" width="250"/>
+</p>
+
+### Accounts & Transactions
+Manage your wallets and transactions with a clear list of accounts and balances.
+<p align="center">
+<img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.51.png" alt="Accounts & Transactions – Wallets" width="250"/></p>
+!<!--aer">
+<mg src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.38.png" alt="Dashboard – Net Worth Breakdown" width="250"/>
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.47.png" alt="Dashboard – Income Progress" width="250"/>
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.52.png" alt="Dashboard – Expense Breakdown" width="250"/>
-</p>
+/->>
 
 ### Financial Insights
 Track your finances over time with trend and detailed views.
@@ -102,7 +117,6 @@ Track your finances over time with trend and detailed views.
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.06.png" alt="Financial Insights – Trend" width="250"/>
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.12.png" alt="Financial Insights – Detail" width="250"/>
 </p>
-
 ### Accounts & Transactions
 Easily manage wallets, review transactions, and drill down into details.
 
@@ -110,4 +124,4 @@ Easily manage wallets, review transactions, and drill down into details.
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.20.png" alt="Accounts & Transactions – Wallets" width="250"/>
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.24.png" alt="Accounts & Transactions – Transactions" width="250"/>
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.27.png" alt="Accounts & Transactions – Details" width="250"/>
-</p>
+/p>
