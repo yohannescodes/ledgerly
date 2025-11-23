@@ -79,8 +79,17 @@ final class AppSettingsStore: ObservableObject {
     }
 
     func updateBaseCurrency(code: String) {
+        let normalized = code.uppercased()
         performMutation { settings in
-            settings.baseCurrencyCode = code
+            let previousBase = (settings.baseCurrencyCode ?? normalized).uppercased()
+            let existingTable = ExchangeRateStorage.decode(settings.customExchangeRates)
+            let rebased = ExchangeRateTransformer.rebase(
+                existingTable,
+                from: previousBase,
+                to: normalized
+            )
+            settings.baseCurrencyCode = normalized
+            settings.customExchangeRates = ExchangeRateStorage.encode(rebased)
         }
     }
 
@@ -179,5 +188,28 @@ enum ExchangeRateStorage {
             result[code.uppercased()] = Decimal(value)
         }
         return result
+    }
+}
+
+private enum ExchangeRateTransformer {
+    static func rebase(_ table: [String: Decimal], from oldBase: String, to newBase: String) -> [String: Decimal] {
+        let oldUpper = oldBase.uppercased()
+        let newUpper = newBase.uppercased()
+        var normalized = table.reduce(into: [String: Decimal]()) { partial, pair in
+            partial[pair.key.uppercased()] = pair.value
+        }
+        // Remove any stray entry for the incoming base so UI never shows "1 BASE = ... BASE"
+        normalized.removeValue(forKey: newUpper)
+        guard oldUpper != newUpper else { return normalized }
+        guard let factor = table.first(where: { $0.key.uppercased() == newUpper })?.value, factor != .zero else {
+            // Can't translate existing rates without a reference; safest to drop them.
+            return [:]
+        }
+        var rebased: [String: Decimal] = [:]
+        for (code, value) in normalized {
+            rebased[code] = value / factor
+        }
+        rebased[oldUpper] = Decimal(1) / factor
+        return rebased
     }
 }

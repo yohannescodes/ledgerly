@@ -36,6 +36,13 @@ struct ManualEntriesView: View {
     @State private var investmentToEdit: ManualAsset?
     @State private var liabilityToEdit: ManualLiability?
 
+    private var currencyConverter: CurrencyConverter {
+        CurrencyConverter(
+            baseCurrency: appSettingsStore.snapshot.baseCurrencyCode,
+            rates: appSettingsStore.snapshot.exchangeRates
+        )
+    }
+
     var body: some View {
         List {
             Section("Assets") {
@@ -278,22 +285,44 @@ struct ManualEntriesView: View {
     }
 
     private func investmentRow(for asset: ManualAsset) -> some View {
-        let summary = investmentSummary(for: asset)
+        let summary = investmentSummary(for: asset, converter: currencyConverter)
         return VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(alignment: .top) {
                 Text(summary.title)
                     .font(.headline)
                 Spacer()
-                Text(formatCurrency(summary.currentValue, code: summary.currencyCode))
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatCurrency(summary.currentValue, code: summary.currencyCode))
+                    if summary.showsOriginalValues {
+                        Text("Orig: \(formatCurrency(summary.originalCurrentValue, code: summary.originalCurrencyCode))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
-            HStack {
-                Text("Cost: \(formatCurrency(summary.costBasis, code: summary.currencyCode))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cost: \(formatCurrency(summary.costBasis, code: summary.currencyCode))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if summary.showsOriginalValues {
+                        Text("Orig cost: \(formatCurrency(summary.originalCostBasis, code: summary.originalCurrencyCode))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
                 Spacer()
-                Text(summary.profitString)
-                    .font(.caption.bold())
-                    .foregroundColor(summary.profit >= 0 ? .green : .red)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(summary.profitString)
+                        .font(.caption.bold())
+                        .foregroundColor(summary.profit >= 0 ? .green : .red)
+                    if let originalProfitString = summary.originalProfitString {
+                        Text(originalProfitString)
+                            .font(.caption2.bold())
+                            .foregroundColor(summary.originalProfit >= 0 ? .green : .red)
+                            .opacity(0.7)
+                    }
+                }
             }
             if let updated = summary.updatedText {
                 Text(updated)
@@ -303,13 +332,27 @@ struct ManualEntriesView: View {
         }
     }
 
-    private func investmentSummary(for asset: ManualAsset) -> InvestmentSummary {
-        let currency = appSettingsStore.snapshot.baseCurrencyCode
+    private func investmentSummary(for asset: ManualAsset, converter: CurrencyConverter) -> InvestmentSummary {
+        let baseCurrency = converter.baseCurrency.uppercased()
+        let nativeCurrency = (asset.currencyCode ?? baseCurrency).uppercased()
         let quantity = asset.investmentQuantity as Decimal? ?? .zero
         let costPerUnit = asset.investmentCostPerUnit as Decimal? ?? .zero
         let currentPrice = asset.marketPrice as Decimal? ?? costPerUnit
-        let costBasis = quantity * costPerUnit
-        let currentValue = quantity * currentPrice
+        let nativeCostBasis = quantity * costPerUnit
+        let nativeCurrentValue = quantity * currentPrice
+        let shouldConvertToBase = nativeCurrency != baseCurrency && converter.rates[nativeCurrency] != nil
+        let displayCurrency: String
+        let costBasis: Decimal
+        let currentValue: Decimal
+        if shouldConvertToBase {
+            displayCurrency = baseCurrency
+            costBasis = converter.convertToBase(nativeCostBasis, currency: nativeCurrency)
+            currentValue = converter.convertToBase(nativeCurrentValue, currency: nativeCurrency)
+        } else {
+            displayCurrency = nativeCurrency
+            costBasis = nativeCostBasis
+            currentValue = nativeCurrentValue
+        }
         let profit = currentValue - costBasis
         let titleComponents = [asset.investmentSymbol?.uppercased(), asset.name].compactMap { $0 }.filter { !$0.isEmpty }
         let title = titleComponents.isEmpty ? (asset.name ?? "Investment") : titleComponents.joined(separator: " • ")
@@ -319,7 +362,11 @@ struct ManualEntriesView: View {
             costBasis: costBasis,
             profit: profit,
             updatedAt: asset.marketPriceUpdatedAt,
-            currencyCode: currency
+            currencyCode: displayCurrency,
+            originalCurrencyCode: nativeCurrency,
+            originalCurrentValue: nativeCurrentValue,
+            originalCostBasis: nativeCostBasis,
+            originalProfit: nativeCurrentValue - nativeCostBasis
         )
     }
 }
@@ -331,6 +378,12 @@ private struct InvestmentSummary {
     let profit: Decimal
     let updatedAt: Date?
     let currencyCode: String
+    let originalCurrencyCode: String
+    let originalCurrentValue: Decimal
+    let originalCostBasis: Decimal
+    let originalProfit: Decimal
+
+    var showsOriginalValues: Bool { originalCurrencyCode != currencyCode }
 
     var profitString: String {
         let formatter = NumberFormatter()
@@ -338,6 +391,15 @@ private struct InvestmentSummary {
         formatter.currencyCode = currencyCode
         let formatted = formatter.string(from: profit as NSNumber) ?? "--"
         return profit >= 0 ? "+" + formatted : formatted
+    }
+
+    var originalProfitString: String? {
+        guard showsOriginalValues else { return nil }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = originalCurrencyCode
+        let formatted = formatter.string(from: originalProfit as NSNumber) ?? "--"
+        return originalProfit >= 0 ? "+" + formatted : formatted
     }
 
     var updatedText: String? {
