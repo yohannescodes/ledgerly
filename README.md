@@ -131,4 +131,4 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 
 | Settings | Dashboard Preferences | Exchange Rates |
 | --- | --- | --- |
-| ![More](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%Pro%Max%20-%202025-11-23%20at%2015.33.59.png)| ![Dashboard Preferences](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.43.png) | ![Settings](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.25.png) |
+| ![More](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%Pro%Max%20-%202025-11-23%20at%2015.33.59.png) | ![Dashboard Preferences](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.43.png) | ![Settings](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.25.png) |
