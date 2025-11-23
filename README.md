@@ -107,9 +107,3 @@ Ledgerly is designed to be privacy-first and extremely transparent—every chang
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.27.png" alt="Accounts & Transactions – Details" width="250" />  
 </p>  
 
-### Settings & More  
-<p align="center">  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.32.png" alt="Settings & Mo <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.39.png" alt="Settings & More – More Options 2" width="250" />re – Settings" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.39.png" alt="Settings & More – Goals" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.39.png" alt="Settings & More – More Options" width="250" />  
-</p>
