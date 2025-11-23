@@ -24,4 +24,5 @@ The actual back-and-forth begins here. We let the AI do its job and help it lear
 
 ledgerly will be public on github in a few minutes
 
-I build apps for the iPhone [@XCYohannes](https://t.me/XCYohannes) content inside it.
+I build apps for the iPhone 
+[@XCYohannes](https://t.me/XCYohannes)
