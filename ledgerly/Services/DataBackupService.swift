@@ -115,56 +115,6 @@ struct LedgerlyBackup: Codable {
         let notes: String?
     }
 
-    struct InvestmentAccountRecord: Codable {
-        let identifier: String
-        let name: String
-        let institution: String?
-        let accountType: String
-        let currencyCode: String
-        let includeInNetWorth: Bool
-        let createdAt: Date?
-        let updatedAt: Date?
-    }
-
-    struct InvestmentAssetRecord: Codable {
-        let identifier: String
-        let symbol: String
-        let assetType: String
-        let name: String
-        let exchange: String?
-        let currencyCode: String
-    }
-
-    struct HoldingLotRecord: Codable {
-        let identifier: String
-        let quantity: Decimal
-        let costPerUnit: Decimal
-        let acquiredDate: Date
-        let notes: String?
-        let fee: Decimal?
-        let accountIdentifier: String?
-        let assetIdentifier: String?
-    }
-
-    struct PriceSnapshotRecord: Codable {
-        let identifier: String
-        let assetIdentifier: String?
-        let price: Decimal
-        let currencyCode: String
-        let provider: String
-        let timestamp: Date
-        let isStale: Bool
-    }
-
-    struct HoldingSaleRecord: Codable {
-        let identifier: String
-        let lotIdentifier: String?
-        let date: Date
-        let quantity: Decimal
-        let price: Decimal
-        let walletName: String?
-    }
-
     let metadata: Metadata
     let categories: [CategoryRecord]
     let wallets: [WalletRecord]
@@ -174,11 +124,6 @@ struct LedgerlyBackup: Codable {
     let budgets: [BudgetRecord]
     let goals: [GoalRecord]
     let netWorthSnapshots: [NetWorthSnapshotRecord]
-    let investmentAccounts: [InvestmentAccountRecord]
-    let investmentAssets: [InvestmentAssetRecord]
-    let holdingLots: [HoldingLotRecord]
-    let priceSnapshots: [PriceSnapshotRecord]
-    let holdingSales: [HoldingSaleRecord]
 }
 
 final class DataBackupService {
@@ -252,12 +197,7 @@ final class DataBackupService {
             manualLiabilities: try exportManualLiabilities(in: context),
             budgets: try exportBudgets(in: context),
             goals: try exportGoals(in: context),
-            netWorthSnapshots: try exportNetWorthSnapshots(in: context),
-            investmentAccounts: try exportInvestmentAccounts(in: context),
-            investmentAssets: try exportInvestmentAssets(in: context),
-            holdingLots: try exportHoldingLots(in: context),
-            priceSnapshots: try exportPriceSnapshots(in: context),
-            holdingSales: try exportHoldingSales(in: context)
+            netWorthSnapshots: try exportNetWorthSnapshots(in: context)
         )
     }
 
@@ -405,81 +345,6 @@ final class DataBackupService {
         }
     }
 
-    private func exportInvestmentAccounts(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.InvestmentAccountRecord] {
-        let request: NSFetchRequest<InvestmentAccount> = InvestmentAccount.fetchRequest()
-        return try context.fetch(request).map {
-            LedgerlyBackup.InvestmentAccountRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                name: $0.name ?? "",
-                institution: $0.institution,
-                accountType: $0.accountType ?? "brokerage",
-                currencyCode: $0.currencyCode ?? "USD",
-                includeInNetWorth: $0.includeInNetWorth,
-                createdAt: $0.createdAt,
-                updatedAt: $0.updatedAt
-            )
-        }
-    }
-
-    private func exportInvestmentAssets(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.InvestmentAssetRecord] {
-        let request: NSFetchRequest<InvestmentAsset> = InvestmentAsset.fetchRequest()
-        return try context.fetch(request).map {
-            LedgerlyBackup.InvestmentAssetRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                symbol: $0.symbol ?? "",
-                assetType: $0.assetType ?? "stock",
-                name: $0.name ?? "",
-                exchange: $0.exchange,
-                currencyCode: $0.currencyCode ?? "USD"
-            )
-        }
-    }
-
-    private func exportHoldingLots(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.HoldingLotRecord] {
-        let request: NSFetchRequest<HoldingLot> = HoldingLot.fetchRequest()
-        return try context.fetch(request).map {
-            LedgerlyBackup.HoldingLotRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                quantity: ($0.quantity as Decimal?) ?? .zero,
-                costPerUnit: ($0.costPerUnit as Decimal?) ?? .zero,
-                acquiredDate: $0.acquiredDate ?? Date(),
-                notes: $0.notes,
-                fee: $0.fee as Decimal?,
-                accountIdentifier: $0.account?.identifier,
-                assetIdentifier: $0.asset?.identifier
-            )
-        }
-    }
-
-    private func exportPriceSnapshots(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.PriceSnapshotRecord] {
-        let request: NSFetchRequest<PriceSnapshot> = PriceSnapshot.fetchRequest()
-        return try context.fetch(request).map {
-            LedgerlyBackup.PriceSnapshotRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                assetIdentifier: $0.asset?.identifier,
-                price: ($0.price as Decimal?) ?? .zero,
-                currencyCode: $0.currencyCode ?? "USD",
-                provider: $0.provider ?? "",
-                timestamp: $0.timestamp ?? Date(),
-                isStale: $0.isStale
-            )
-        }
-    }
-
-    private func exportHoldingSales(in context: NSManagedObjectContext) throws -> [LedgerlyBackup.HoldingSaleRecord] {
-        let request: NSFetchRequest<HoldingSale> = HoldingSale.fetchRequest()
-        return try context.fetch(request).map {
-            LedgerlyBackup.HoldingSaleRecord(
-                identifier: $0.identifier ?? UUID().uuidString,
-                lotIdentifier: $0.lot?.identifier,
-                date: $0.date ?? Date(),
-                quantity: ($0.quantity as Decimal?) ?? .zero,
-                price: ($0.price as Decimal?) ?? .zero,
-                walletName: $0.walletName
-            )
-        }
-    }
-
     private func apply(backup: LedgerlyBackup, in context: NSManagedObjectContext) throws {
         try importCategories(backup.categories, in: context)
         try importWallets(backup.wallets, in: context)
@@ -489,11 +354,6 @@ final class DataBackupService {
         try importBudgets(backup.budgets, in: context)
         try importGoals(backup.goals, in: context)
         try importNetWorthSnapshots(backup.netWorthSnapshots, in: context)
-        try importInvestmentAssets(backup.investmentAssets, in: context)
-        try importInvestmentAccounts(backup.investmentAccounts, in: context)
-        try importHoldingLots(backup.holdingLots, in: context)
-        try importPriceSnapshots(backup.priceSnapshots, in: context)
-        try importHoldingSales(backup.holdingSales, in: context)
     }
 
     private func importCategories(_ records: [LedgerlyBackup.CategoryRecord], in context: NSManagedObjectContext) throws {
@@ -644,83 +504,6 @@ final class DataBackupService {
             snapshot.tangibleNetWorth = NSDecimalNumber(decimal: record.tangibleNetWorth)
             snapshot.volatileAssets = NSDecimalNumber(decimal: record.volatileAssets)
             snapshot.notes = record.notes
-        }
-    }
-
-    private func importInvestmentAssets(_ records: [LedgerlyBackup.InvestmentAssetRecord], in context: NSManagedObjectContext) throws {
-        for record in records {
-            let asset = try fetchEntity(InvestmentAsset.self, identifier: record.identifier, in: context) ?? InvestmentAsset(context: context)
-            asset.identifier = record.identifier
-            asset.symbol = record.symbol
-            asset.assetType = record.assetType
-            asset.name = record.name
-            asset.exchange = record.exchange
-            asset.currencyCode = record.currencyCode
-        }
-    }
-
-    private func importInvestmentAccounts(_ records: [LedgerlyBackup.InvestmentAccountRecord], in context: NSManagedObjectContext) throws {
-        for record in records {
-            let account = try fetchEntity(InvestmentAccount.self, identifier: record.identifier, in: context) ?? InvestmentAccount(context: context)
-            account.identifier = record.identifier
-            account.name = record.name
-            account.institution = record.institution
-            account.accountType = record.accountType
-            account.currencyCode = record.currencyCode
-            account.includeInNetWorth = record.includeInNetWorth
-            account.createdAt = record.createdAt ?? account.createdAt ?? Date()
-            account.updatedAt = record.updatedAt ?? Date()
-        }
-    }
-
-    private func importHoldingLots(_ records: [LedgerlyBackup.HoldingLotRecord], in context: NSManagedObjectContext) throws {
-        for record in records {
-            let lot = try fetchEntity(HoldingLot.self, identifier: record.identifier, in: context) ?? HoldingLot(context: context)
-            lot.identifier = record.identifier
-            lot.quantity = NSDecimalNumber(decimal: record.quantity)
-            lot.costPerUnit = NSDecimalNumber(decimal: record.costPerUnit)
-            lot.acquiredDate = record.acquiredDate
-            lot.notes = record.notes
-            if let fee = record.fee {
-                lot.fee = NSDecimalNumber(decimal: fee)
-            } else {
-                lot.fee = nil
-            }
-            if let accountID = record.accountIdentifier {
-                lot.account = try fetchEntity(InvestmentAccount.self, identifier: accountID, in: context)
-            }
-            if let assetID = record.assetIdentifier {
-                lot.asset = try fetchEntity(InvestmentAsset.self, identifier: assetID, in: context)
-            }
-        }
-    }
-
-    private func importPriceSnapshots(_ records: [LedgerlyBackup.PriceSnapshotRecord], in context: NSManagedObjectContext) throws {
-        for record in records {
-            let snapshot = try fetchEntity(PriceSnapshot.self, identifier: record.identifier, in: context) ?? PriceSnapshot(context: context)
-            snapshot.identifier = record.identifier
-            snapshot.price = NSDecimalNumber(decimal: record.price)
-            snapshot.currencyCode = record.currencyCode
-            snapshot.provider = record.provider
-            snapshot.timestamp = record.timestamp
-            snapshot.isStale = record.isStale
-            if let assetID = record.assetIdentifier {
-                snapshot.asset = try fetchEntity(InvestmentAsset.self, identifier: assetID, in: context)
-            }
-        }
-    }
-
-    private func importHoldingSales(_ records: [LedgerlyBackup.HoldingSaleRecord], in context: NSManagedObjectContext) throws {
-        for record in records {
-            let sale = try fetchEntity(HoldingSale.self, identifier: record.identifier, in: context) ?? HoldingSale(context: context)
-            sale.identifier = record.identifier
-            sale.date = record.date
-            sale.quantity = NSDecimalNumber(decimal: record.quantity)
-            sale.price = NSDecimalNumber(decimal: record.price)
-            sale.walletName = record.walletName
-            if let lotID = record.lotIdentifier {
-                sale.lot = try fetchEntity(HoldingLot.self, identifier: lotID, in: context)
-            }
         }
     }
 

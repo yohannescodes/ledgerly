@@ -27,7 +27,6 @@ struct ContentView: View {
     ContentView()
         .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))
         .environmentObject(TransactionsStore(persistence: PersistenceController.preview))
-        .environmentObject(InvestmentsStore(persistence: PersistenceController.preview))
         .environmentObject(BudgetsStore(persistence: PersistenceController.preview))
         .environmentObject(GoalsStore(persistence: PersistenceController.preview))
 }

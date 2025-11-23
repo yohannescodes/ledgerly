@@ -14,10 +14,10 @@ Ledgerly is a SwiftUI + Core Data personal finance app that keeps every data poi
 
 ## Architecture
 - **SwiftUI-first UI** with tab-based navigation (`MainTabView`), dedicated views per module, and sheet-driven flows for create/edit actions.
-- **Core Data** persistence managed by `PersistenceController` and domain-specific stores (`WalletsStore`, `TransactionsStore`, `InvestmentsStore`, etc.)
+- **Core Data** persistence managed by `PersistenceController` and domain-specific stores (`WalletsStore`, `TransactionsStore`, etc.)
 - **Combine bindings** to propagate changes: stores publish through `@Published`, and the Net Worth dashboard listens via notifications (wallets/investments) to remain real time.
 - **Currency conversion** is centralized in `CurrencyConverter`, using base currency + custom rates defined in Settings.
-- **PriceService** can pull quotes from AlphaVantage/CoinGecko (when API keys are supplied) and also provides deterministic local prices for offline/demo usage.
+- **ManualInvestmentPriceService** pulls CoinGecko quotes to refresh manual holdings (and falls back to deterministic local pricing when offline).
 
 ## Feature Tour
 ### Onboarding
@@ -71,8 +71,7 @@ Ledgerly is a SwiftUI + Core Data personal finance app that keeps every data poi
 ## Data Model Overview
 - `Wallet`: name, type (income/checking/etc.), base currency, balances, include-in-net-worth flag.
 - `Transaction`: amount, direction, currency, wallet, category, notes, date, converted base amount.
-- `ManualAsset` / `ManualLiability`: assets (tangible/receivable) and debts with include-in-core/tangible flags.
-- `InvestmentAccount` / `InvestmentAsset` / `HoldingLot`: accounts, assets (stock/crypto), holding lots with cost basis and sales history.
+- `ManualAsset` / `ManualLiability`: assets (tangible/receivable/investment) and debts with include-in-core/tangible flags plus investment metadata (symbol, quantity, cost basis, price updates).
 - `PriceSnapshot`: cached price history per investment asset.
 - `MonthlyBudget`, `SavingGoal`, `NetWorthSnapshot`, `AppSettings`, `Category`, `Wallet` helper models.
 

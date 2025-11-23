@@ -141,6 +141,7 @@ final class TransactionsStore: ObservableObject {
 
     func fetchExpenseBreakdown(since startDate: Date) -> [ExpenseBreakdownEntry] {
         let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
         var entries: [ExpenseBreakdownEntry] = []
         context.performAndWait {
             let request = Transaction.fetchRequestAll()
@@ -157,7 +158,9 @@ final class TransactionsStore: ObservableObject {
                 }
                 entries = grouped.map { key, transactions in
                     let total = transactions.reduce(Decimal.zero) { $0 + $1.amount }
-                    let convertedTotal = transactions.reduce(Decimal.zero) { $0 + $1.convertedAmountBase }
+                    let convertedTotal = transactions.reduce(Decimal.zero) { partial, model in
+                        partial + converter.convertToBase(model.amount, currency: model.currencyCode)
+                    }
                     let colorHex = transactions.first?.category?.colorHex
                     return ExpenseBreakdownEntry(label: key, amount: total, convertedAmount: convertedTotal, colorHex: colorHex)
                 }
@@ -171,6 +174,7 @@ final class TransactionsStore: ObservableObject {
 
     func fetchMonthlyExpenseTotals() -> ExpenseTotals {
         let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
         var current: Decimal = .zero
         var previous: Decimal = .zero
         context.performAndWait {
@@ -178,13 +182,13 @@ final class TransactionsStore: ObservableObject {
             let now = Date()
             let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
             let previousStart = calendar.date(byAdding: .month, value: -1, to: startOfMonth) ?? now
-            current = totalExpenses(from: startOfMonth, to: now, context: context)
-            previous = totalExpenses(from: previousStart, to: startOfMonth, context: context)
+            current = totalExpenses(from: startOfMonth, to: now, context: context, converter: converter)
+            previous = totalExpenses(from: previousStart, to: startOfMonth, context: context, converter: converter)
         }
         return ExpenseTotals(currentTotal: current, previousTotal: previous)
     }
 
-    private func totalExpenses(from start: Date, to end: Date, context: NSManagedObjectContext) -> Decimal {
+    private func totalExpenses(from start: Date, to end: Date, context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
         let request = Transaction.fetchRequestAll()
         request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             NSPredicate(format: "direction == %@", "expense"),
@@ -194,7 +198,9 @@ final class TransactionsStore: ObservableObject {
         do {
             let results = try context.fetch(request)
             let models = results.map(TransactionModel.init)
-            return models.reduce(.zero) { $0 + $1.convertedAmountBase }
+            return models.reduce(.zero) { partial, model in
+                partial + converter.convertToBase(model.amount, currency: model.currencyCode)
+            }
         } catch {
             assertionFailure("Failed to fetch expense totals: \(error)")
             return .zero

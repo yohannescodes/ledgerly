@@ -71,10 +71,10 @@ struct NetWorthHistoryCard: View {
             liabilityAmount = totals.totalLiabilities
         }
         return [
-            NetWorthSegment(label: "Assets", amount: totals.manualAssets, color: .blue.opacity(0.8)),
-            NetWorthSegment(label: "Investments", amount: totals.totalInvestments, color: .purple.opacity(0.8)),
             NetWorthSegment(label: "Wallets", amount: totals.walletAssets, color: .green.opacity(0.8)),
+            NetWorthSegment(label: "Tangible Assets", amount: totals.tangibleAssets, color: .blue.opacity(0.8)),
             NetWorthSegment(label: "Receivables", amount: totals.receivables, color: .orange.opacity(0.8)),
+            NetWorthSegment(label: "Investments", amount: totals.totalInvestments, color: .purple.opacity(0.8)),
             NetWorthSegment(label: "Liabilities", amount: liabilityAmount, color: .red.opacity(0.8))
         ]
         .filter { $0.amount > 0 }

@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import UniformTypeIdentifiers
 
 struct SettingsDebugView: View {
@@ -8,7 +7,6 @@ struct SettingsDebugView: View {
     @EnvironmentObject private var walletsStore: WalletsStore
     @EnvironmentObject private var budgetsStore: BudgetsStore
     @EnvironmentObject private var goalsStore: GoalsStore
-    @EnvironmentObject private var investmentsStore: InvestmentsStore
 
     private let backupService: DataBackupService
 
@@ -167,7 +165,6 @@ struct SettingsDebugView: View {
         walletsStore.reload()
         budgetsStore.reload()
         goalsStore.reload()
-        investmentsStore.reload()
         netWorthStore.reload()
         appSettingsStore.refresh()
     }
@@ -200,7 +197,6 @@ struct SettingsDebugView: View {
         .environmentObject(WalletsStore(persistence: PersistenceController.preview))
         .environmentObject(BudgetsStore(persistence: PersistenceController.preview))
         .environmentObject(GoalsStore(persistence: PersistenceController.preview))
-        .environmentObject(InvestmentsStore(persistence: PersistenceController.preview))
 }
 
 private struct ExportedFile: Identifiable {

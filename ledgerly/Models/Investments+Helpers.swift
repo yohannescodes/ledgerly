@@ -264,11 +264,9 @@ extension NetWorthSnapshotModel {
             tangibleNetWorth: managedObject.tangibleNetWorth as Decimal? ?? .zero,
             volatileAssets: managedObject.volatileAssets as Decimal? ?? .zero,
             walletAssets: .zero,
-            manualAssets: .zero,
+            tangibleAssets: .zero,
             manualInvestments: .zero,
-            receivables: .zero,
-            stockInvestments: .zero,
-            cryptoInvestments: .zero
+            receivables: .zero
         )
         self.init(
             objectID: managedObject.objectID,

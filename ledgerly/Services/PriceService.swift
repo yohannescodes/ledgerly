@@ -162,25 +162,35 @@ final class ManualInvestmentPriceService {
             let converter = CurrencyConverter.fromSettings(in: context)
             for descriptor in descriptors {
                 guard let asset = try? context.existingObject(with: descriptor.objectID) as? ManualAsset else { continue }
-                let price: Decimal?
+                let quotedPriceUSD: Decimal?
                 switch descriptor.provider {
                 case .crypto:
                     if let usd = cryptoQuotes[descriptor.identifier.lowercased()] {
-                        price = converter.convertToBase(Decimal(usd), currency: "USD")
+                        quotedPriceUSD = Decimal(usd)
                     } else {
-                        price = nil
+                        quotedPriceUSD = nil
                     }
                 case .stock:
-                    price = nil
+                    quotedPriceUSD = nil
                 }
-                guard let basePrice = price else { continue }
+                guard let priceUSD = quotedPriceUSD else { continue }
+                let assetCurrencyRaw = asset.currencyCode ?? converter.baseCurrency
+                let assetCurrencyCode = assetCurrencyRaw.uppercased()
+                let priceInBase = converter.convertToBase(priceUSD, currency: "USD")
+                let localizedPrice: Decimal
+                if assetCurrencyCode == converter.baseCurrency.uppercased() {
+                    localizedPrice = priceInBase
+                } else if converter.rates[assetCurrencyCode] != nil {
+                    localizedPrice = converter.convertFromBase(priceInBase, to: assetCurrencyCode)
+                } else {
+                    localizedPrice = priceInBase
+                }
                 let quantity = descriptor.quantity
-                let newValue = basePrice * quantity
-                asset.marketPrice = NSDecimalNumber(decimal: basePrice)
-                asset.marketPriceCurrencyCode = baseCurrency
+                let newValue = localizedPrice * quantity
+                asset.marketPrice = NSDecimalNumber(decimal: localizedPrice)
+                asset.marketPriceCurrencyCode = assetCurrencyRaw
                 asset.marketPriceUpdatedAt = Date()
                 asset.value = NSDecimalNumber(decimal: newValue)
-                asset.currencyCode = baseCurrency
             }
             try? context.save()
         }

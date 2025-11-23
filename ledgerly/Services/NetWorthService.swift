@@ -1,6 +1,5 @@
 import CoreData
 import Foundation
-import Combine
 
 struct NetWorthTotals {
     let totalAssets: Decimal
@@ -10,13 +9,11 @@ struct NetWorthTotals {
     let tangibleNetWorth: Decimal
     let volatileAssets: Decimal
     let walletAssets: Decimal
-    let manualAssets: Decimal
+    let tangibleAssets: Decimal
     let manualInvestments: Decimal
     let receivables: Decimal
-    let stockInvestments: Decimal
-    let cryptoInvestments: Decimal
 
-    var totalInvestments: Decimal { stockInvestments + cryptoInvestments + manualInvestments }
+    var totalInvestments: Decimal { manualInvestments }
 }
 
 final class NetWorthService {
@@ -34,8 +31,6 @@ final class NetWorthService {
         var walletAssets: Decimal = .zero
         var manualAssetsTotal: Decimal = .zero
         var manualInvestments: Decimal = .zero
-        var stockInvestments: Decimal = .zero
-        var cryptoInvestments: Decimal = .zero
         var receivables: Decimal = .zero
         var coreAssets: Decimal = .zero
         var tangibleAssets: Decimal = .zero
@@ -53,13 +48,10 @@ final class NetWorthService {
                 converter: converter
             )
             totalLiabilities += sumManualLiabilities(in: context, converter: converter)
-            let investmentBreakdown = sumHoldingsValue(in: context, converter: converter)
-            stockInvestments = investmentBreakdown.stocks
-            cryptoInvestments = investmentBreakdown.crypto
         }
 
-        let manualAssets = max(manualAssetsTotal - manualInvestments, .zero)
-        totalAssets = walletAssets + manualAssets + manualInvestments + stockInvestments + cryptoInvestments
+        let tangibleAssetsNet = max(manualAssetsTotal - manualInvestments - receivables, .zero)
+        totalAssets = walletAssets + tangibleAssetsNet + receivables + manualInvestments
 
         let coreNetWorth = coreAssets - totalLiabilities
         let tangibleNetWorth = tangibleAssets - totalLiabilities
@@ -72,11 +64,9 @@ final class NetWorthService {
             tangibleNetWorth: tangibleNetWorth,
             volatileAssets: volatileAssets,
             walletAssets: walletAssets,
-            manualAssets: manualAssets,
+            tangibleAssets: tangibleAssetsNet,
             manualInvestments: manualInvestments,
-            receivables: receivables,
-            stockInvestments: stockInvestments,
-            cryptoInvestments: cryptoInvestments
+            receivables: receivables
         )
     }
 
@@ -150,29 +140,6 @@ final class NetWorthService {
         }
     }
 
-    private func sumHoldingsValue(in context: NSManagedObjectContext, converter: CurrencyConverter) -> (total: Decimal, stocks: Decimal, crypto: Decimal) {
-        let request: NSFetchRequest<HoldingLot> = HoldingLot.fetchRequest()
-        guard let holdings = try? context.fetch(request) else { return (.zero, .zero, .zero) }
-        var total: Decimal = .zero
-        var stocks: Decimal = .zero
-        var crypto: Decimal = .zero
-        for lot in holdings {
-            guard let asset = lot.asset else { continue }
-            let quantity = lot.quantity as Decimal? ?? .zero
-            let latestPrice = latestSnapshotPrice(for: asset)
-            if let price = latestPrice {
-                let value = converter.convertToBase(quantity * price, currency: asset.currencyCode)
-                total += value
-                if (asset.assetType ?? "").lowercased().contains("crypto") {
-                    crypto += value
-                } else {
-                    stocks += value
-                }
-            }
-        }
-        return (total, stocks, crypto)
-    }
-
     private func sumWalletBalances(in context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
         let request: NSFetchRequest<Wallet> = Wallet.fetchRequest()
         request.predicate = NSPredicate(format: "includeInNetWorth == YES")
@@ -180,11 +147,5 @@ final class NetWorthService {
         return wallets.reduce(.zero) {
             $0 + converter.convertToBase($1.currentBalance as Decimal? ?? .zero, currency: $1.baseCurrencyCode)
         }
-    }
-
-    private func latestSnapshotPrice(for asset: InvestmentAsset) -> Decimal? {
-        guard let snapshots = asset.snapshots as? Set<PriceSnapshot> else { return nil }
-        let latest = snapshots.sorted { ($0.timestamp ?? .distantPast) > ($1.timestamp ?? .distantPast) }.first
-        return latest?.price as Decimal?
     }
 }

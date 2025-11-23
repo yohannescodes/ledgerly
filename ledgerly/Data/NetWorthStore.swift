@@ -22,10 +22,6 @@ final class NetWorthStore: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.reload() }
             .store(in: &cancellables)
-        NotificationCenter.default.publisher(for: .investmentsDidChange)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.reload() }
-            .store(in: &cancellables)
     }
 
     func reload() {

@@ -93,20 +93,18 @@ struct GoalsView: View {
                             }
 
                             Button(role: .destructive) {
-                                goalsStore.deleteGoal(goalID: goal.id)
+                                deleteGoal(goal)
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
                     }
-                    .onDelete(perform: deleteGoals)
                 }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Goals")
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) { EditButton() }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showingForm = true }) {
                     Image(systemName: "plus")
@@ -216,13 +214,8 @@ struct GoalsView: View {
         return "Due in \(daysRemaining) days (\(formattedDate))"
     }
 
-    private func deleteGoals(at offsets: IndexSet) {
-        let goals = offsets.compactMap { index in
-            filteredGoals[safe: index]
-        }
-        goals.forEach { goal in
-            goalsStore.deleteGoal(goalID: goal.id)
-        }
+    private func deleteGoal(_ goal: SavingGoalModel) {
+        goalsStore.deleteGoal(goalID: goal.id)
     }
 }
 
