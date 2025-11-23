@@ -2,6 +2,9 @@
 
 ledgerly is an offline-first SwiftUI personal finance app that keeps every record on-device while still giving you wallets, budgets, goals, manual assets, liabilities, investments, and currency-aware analytics.
 
+## Contributing
+Read `CONTRIBUTING.md` for collaboration guidelines, coding standards, and the review checklist.
+
 ## Highlights
 - SwiftUI interface with Core Data powered stores for wallets, transactions, budgets, goals, and net-worth widgets.
 - Offline-friendly currency and investment pricing with manual overrides plus optional CoinGecko refreshes when a network is available.
