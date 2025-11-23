@@ -124,7 +124,7 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 ## Screenshots
 | Home | Wallets | Transactions |
 | --- | --- | --- |
-| ![Home](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.16.png) | ![Wallets](ledgerly/Screenshots/Simulator%20Screenshot%20-%20i| ![Home](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.16.png) | ![Wallets](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.51.png) | ![Transactions](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.55.png) |
+| ![Home](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.16.png) | ![Wallets](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.51.png) | ![Transactions](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.33.55.png) |
 | Budgets | Goals | Manual Entries |
 | --- | --- | --- |
 | ![Budgets](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.12.png) | ![Goals](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.17.png)| ![Manual Entries](ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2015.34.08.png) |
