@@ -84,26 +84,30 @@ Ledgerly is a SwiftUI + Core Data personal finance app that keeps every data poi
 
 Ledgerly is designed to be privacy-first and extremely transparent—every change updates the home dashboard immediately, exchange rates are user-controlled, and all heavy calculations stay on-device. Contributions that keep those principles are welcome!
 
-## Screenshots  
+## Screenshots
 
-### Dashboard  
-<p align="center">  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.38.png" alt="Dashboard – Net Worth Breakdown" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.47.png" alt="Dashboard – Income Progress" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.52.png" alt="Dashboard – Expense Breakdown" width="250" />  
-</p>  
+### Dashboard
+The dashboard provides a quick overview of your financial health: Net Worth Breakdown, income progress, and expense breakdown.
 
-### Financial Insights  
-<p align="center">  
-  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.06.png" alt="Financial Insights – Trend" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.12.png" alt="Financial Insights – Detail" width="250" />  
-</p>  
+<p align="center">
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.38.png" alt="Dashboard – Net Worth Breakdown" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.47.png" alt="Dashboard – Income Progress" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.52.png" alt="Dashboard – Expense Breakdown" width="250"/>
+</p>
 
-### Accounts & Transactions  
-<p align="center">  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.20.png" alt="Accounts & Transactions – Wallets" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.24.png" alt="Accounts & Transactions – Transactions" width="250" />  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.27.png" alt="Accounts & Transactions – Details" width="250" />  
-</p>  
+### Financial Insights
+Track your finances over time with trend and detailed views.
 
+<p align="center">
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.06.png" alt="Financial Insights – Trend" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.12.png" alt="Financial Insights – Detail" width="250"/>
+</p>
+
+### Accounts & Transactions
+Easily manage wallets, review transactions, and drill down into details.
+
+<p align="center">
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.20.png" alt="Accounts & Transactions – Wallets" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.24.png" alt="Accounts & Transactions – Transactions" width="250"/>
+  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.27.png" alt="Accounts & Transactions – Details" width="250"/>
+</p>
