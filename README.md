@@ -95,7 +95,7 @@ Ledgerly is designed to be privacy-first and extremely transparent—every chang
 
 ### Financial Insights  
 <p align="center">  
-  <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.40.57.png" alt="Financial Insights – Overview" width="250" />  
+  
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.06.png" alt="Financial Insights – Trend" width="250" />  
   <img src="ledgerly/Screenshots/Simulator%20Screenshot%20-%20iPhone%2016%20Pro%20Max%20-%202025-11-23%20at%2013.41.12.png" alt="Financial Insights – Detail" width="250" />  
 </p>  
