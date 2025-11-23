@@ -1,10 +1,10 @@
-# Contributing to Ledgerly
+# Contributing to ledgerly
 
-Ledgerly is an MIT-licensed, offline-first SwiftUI personal finance app. Every contribution helps the community keep budgeting, net-worth tracking, and portfolio monitoring on-device. This guide explains how to collaborate effectively while keeping Ledgerly's privacy-first mission intact.
+ledgerly is an MIT-licensed, offline-first SwiftUI personal finance app. Every contribution helps the community keep budgeting, net-worth tracking, and portfolio monitoring on-device. This guide explains how to collaborate effectively while keeping ledgerly's privacy-first mission intact.
 
 ## Ground Rules & Code of Conduct
 - Be respectful and constructive in issues, pull requests (PRs), and discussions.
-- Ledgerly stays MIT-licensed. By contributing you confirm you have the right to share your work and you agree it will be distributed under the MIT License found in `LICENSE`.
+- ledgerly stays MIT-licensed. By contributing you confirm you have the right to share your work and you agree it will be distributed under the MIT License found in `LICENSE`.
 - Privacy comes first: never include real personal data in issues, fixtures, or screenshots.
 - Keep the app offline-friendly. New features should not force a network dependency, and any optional networking (e.g., CoinGecko refreshes) must fail gracefully.
 
@@ -54,6 +54,6 @@ Before opening a new issue, search the tracker and skim the `docs/phase*.md` pla
 - Report vulnerabilities privately by emailing the maintainer or opening a security advisory draft instead of a public issue.
 
 ## License Notes
-Ledgerly uses the MIT License (`LICENSE`). Contribution implies consent to publish your work under the same license. Include third-party notices when adding external assets or source files, and ensure dependencies are MIT-compatible.
+ledgerly uses the MIT License (`LICENSE`). Contribution implies consent to publish your work under the same license. Include third-party notices when adding external assets or source files, and ensure dependencies are MIT-compatible.
 
-Thanks for keeping Ledgerly delightful, local, and secure!
+Thanks for keeping ledgerly delightful, local, and secure!
