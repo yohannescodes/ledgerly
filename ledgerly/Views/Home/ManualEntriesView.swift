@@ -37,6 +37,7 @@ struct ManualEntriesView: View {
     @State private var receivableToEdit: ManualAsset?
     @State private var investmentToEdit: ManualAsset?
     @State private var liabilityToEdit: ManualLiability?
+    @State private var refreshingStockIDs: Set<NSManagedObjectID> = []
 
     private var currencyConverter: CurrencyConverter {
         CurrencyConverter(
@@ -146,6 +147,7 @@ struct ManualEntriesView: View {
                     investmentSymbol: entry.symbol,
                     investmentQuantity: entry.quantity,
                     investmentCostPerUnit: entry.costPerUnit,
+                    investmentContractMultiplier: entry.contractMultiplier,
                     marketPrice: entry.costPerUnit,
                     marketPriceCurrencyCode: entry.currencyCode,
                     fundingWallet: wallet
@@ -210,7 +212,8 @@ struct ManualEntriesView: View {
                         quantity: investment.investmentQuantity as Decimal? ?? .zero,
                         costPerUnit: investment.investmentCostPerUnit as Decimal? ?? .zero,
                         currencyCode: investment.currencyCode ?? appSettingsStore.snapshot.baseCurrencyCode,
-                        walletID: investment.wallet?.objectID
+                        walletID: investment.wallet?.objectID,
+                        contractMultiplier: investment.investmentContractMultiplier as Decimal? ?? 1
                     ),
                     onSave: { entry in
                         let identifier = formattedIdentifier(for: entry)
@@ -222,6 +225,7 @@ struct ManualEntriesView: View {
                         investment.investmentSymbol = entry.symbol
                         investment.investmentQuantity = NSDecimalNumber(decimal: entry.quantity)
                         investment.investmentCostPerUnit = NSDecimalNumber(decimal: entry.costPerUnit)
+                        investment.investmentContractMultiplier = NSDecimalNumber(decimal: entry.contractMultiplier)
                         investment.currencyCode = entry.currencyCode
                         investment.value = NSDecimalNumber(decimal: newValue)
                         if let walletID = entry.walletID,
@@ -353,6 +357,23 @@ struct ManualEntriesView: View {
         goalsStore.applyWalletDelta(walletID: walletID, amountDelta: amount)
     }
 
+    private func refreshStockPrice(for asset: ManualAsset) {
+        guard asset.investmentProvider == ManualInvestmentInput.Kind.stock.rawValue else { return }
+        let assetID = asset.objectID
+        if refreshingStockIDs.contains(assetID) { return }
+        refreshingStockIDs.insert(assetID)
+        Task {
+            await ManualInvestmentPriceService.shared.refresh(
+                baseCurrency: appSettingsStore.snapshot.baseCurrencyCode,
+                assetIDs: [assetID]
+            )
+            await MainActor.run {
+                refreshingStockIDs.remove(assetID)
+                netWorthStore.reload()
+            }
+        }
+    }
+
     private func formattedIdentifier(for entry: ManualInvestmentInput) -> String {
         switch entry.kind {
         case .crypto:
@@ -364,6 +385,8 @@ struct ManualEntriesView: View {
 
     private func investmentRow(for asset: ManualAsset) -> some View {
         let summary = investmentSummary(for: asset, converter: currencyConverter)
+        let isStock = asset.investmentProvider == ManualInvestmentInput.Kind.stock.rawValue
+        let isRefreshing = refreshingStockIDs.contains(asset.objectID)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
                 Text(summary.title)
@@ -371,6 +394,9 @@ struct ManualEntriesView: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(formatCurrency(summary.currentValue, code: summary.currencyCode))
+                    Text(summary.profitString)
+                        .font(.caption.bold())
+                        .foregroundColor(summary.profit >= 0 ? .green : .red)
                     if summary.showsOriginalValues {
                         Text("Orig: \(formatCurrency(summary.originalCurrentValue, code: summary.originalCurrencyCode))")
                             .font(.caption2)
@@ -391,9 +417,6 @@ struct ManualEntriesView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(summary.profitString)
-                        .font(.caption.bold())
-                        .foregroundColor(summary.profit >= 0 ? .green : .red)
                     if let originalProfitString = summary.originalProfitString {
                         Text(originalProfitString)
                             .font(.caption2.bold())
@@ -406,6 +429,22 @@ struct ManualEntriesView: View {
                 Text(updated)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+            }
+            if isStock {
+                Button(action: { refreshStockPrice(for: asset) }) {
+                    HStack(spacing: 4) {
+                        if isRefreshing {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                        }
+                        Text(isRefreshing ? "Refreshing…" : "Refresh price")
+                    }
+                    .font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .disabled(isRefreshing)
             }
         }
     }
@@ -510,6 +549,7 @@ struct ManualInvestmentInput {
     var costPerUnit: Decimal
     var currencyCode: String
     var walletID: NSManagedObjectID?
+    var contractMultiplier: Decimal
 
     init(
         kind: Kind = .crypto,
@@ -519,7 +559,8 @@ struct ManualInvestmentInput {
         quantity: Decimal = .zero,
         costPerUnit: Decimal = .zero,
         currencyCode: String,
-        walletID: NSManagedObjectID? = nil
+        walletID: NSManagedObjectID? = nil,
+        contractMultiplier: Decimal = 1
     ) {
         self.kind = kind
         self.name = name
@@ -529,6 +570,7 @@ struct ManualInvestmentInput {
         self.costPerUnit = costPerUnit
         self.currencyCode = currencyCode
         self.walletID = walletID
+        self.contractMultiplier = contractMultiplier
     }
 
     var totalCostBasis: Decimal {
@@ -542,6 +584,14 @@ struct InvestmentEntryFormView: View {
     let wallets: [WalletModel]
     let onSave: (ManualInvestmentInput) -> Void
     let onDelete: (() -> Void)?
+
+    // Presets help CFD traders: SP500 tickers usually price at 1/10th of the index, so a 10x multiplier aligns Alpha Vantage quotes with $1/point contracts.
+    private let defaultContractMultipliers: [String: Decimal] = [
+        "^GSPC": 10,
+        "GSPC": 10,
+        "SP500": 10,
+        "USA500": 10
+    ]
 
     @Environment(\.dismiss) private var dismiss
     @State private var input: ManualInvestmentInput
@@ -585,12 +635,22 @@ struct InvestmentEntryFormView: View {
                             if input.name.isEmpty, let name = suggestion.name {
                                 input.name = name
                             }
+                            applyDefaultContractMultiplierIfNeeded(for: suggestion.ticker)
+                        }
+                        .onChange(of: input.coinID) { newValue in
+                            applyDefaultContractMultiplierIfNeeded(for: newValue)
                         }
                     }
                     TextField("Display Symbol", text: $input.symbol)
                         .autocapitalization(.allCharacters)
                     DecimalTextField(title: "Units Held", value: $input.quantity)
                     DecimalTextField(title: "Cost per Unit", value: $input.costPerUnit)
+                    if input.kind == .stock {
+                        DecimalTextField(title: "Contract Multiplier", value: $input.contractMultiplier)
+                        Text("Leave at 1 for regular stocks/ETFs. Enter your broker's contract size when tracking index CFDs so live quotes are scaled correctly.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     NavigationLink {
                         CurrencyPickerView(selectedCode: $input.currencyCode)
                             .navigationTitle("Select Currency")
@@ -647,12 +707,28 @@ struct InvestmentEntryFormView: View {
     }
 
     private var canSave: Bool {
-        !input.name.isEmpty && !input.coinID.isEmpty && input.quantity > 0 && input.costPerUnit > 0 && input.walletID != nil && !wallets.isEmpty
+        guard !input.name.isEmpty,
+              !input.coinID.isEmpty,
+              input.quantity > 0,
+              input.costPerUnit > 0,
+              input.walletID != nil,
+              !wallets.isEmpty else { return false }
+        if input.kind == .stock && input.contractMultiplier <= 0 { return false }
+        return true
     }
 
     private func save() {
         onSave(input)
         dismiss()
+    }
+
+    private func applyDefaultContractMultiplierIfNeeded(for ticker: String) {
+        guard input.kind == .stock,
+              input.contractMultiplier == 1 else { return }
+        let normalized = ticker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if let preset = defaultContractMultipliers[normalized] {
+            input.contractMultiplier = preset
+        }
     }
 }
 

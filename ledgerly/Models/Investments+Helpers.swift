@@ -81,6 +81,7 @@ struct ManualAssetModel: Identifiable, Hashable {
     let investmentSymbol: String?
     let investmentQuantity: Decimal
     let investmentCostPerUnit: Decimal
+    let investmentContractMultiplier: Decimal
     let marketPrice: Decimal?
     let marketPriceCurrencyCode: String?
     let marketPriceUpdatedAt: Date?
@@ -226,6 +227,7 @@ extension ManualAssetModel {
         investmentSymbol = managedObject.investmentSymbol
         investmentQuantity = managedObject.investmentQuantity as Decimal? ?? .zero
         investmentCostPerUnit = managedObject.investmentCostPerUnit as Decimal? ?? .zero
+        investmentContractMultiplier = managedObject.investmentContractMultiplier as Decimal? ?? 1
         marketPrice = managedObject.marketPrice as Decimal?
         marketPriceCurrencyCode = managedObject.marketPriceCurrencyCode
         marketPriceUpdatedAt = managedObject.marketPriceUpdatedAt
@@ -405,6 +407,7 @@ extension ManualAsset {
         investmentSymbol: String? = nil,
         investmentQuantity: Decimal? = nil,
         investmentCostPerUnit: Decimal? = nil,
+        investmentContractMultiplier: Decimal? = nil,
         marketPrice: Decimal? = nil,
         marketPriceCurrencyCode: String? = nil,
         fundingWallet: Wallet? = nil
@@ -427,6 +430,9 @@ extension ManualAsset {
         }
         if let investmentCostPerUnit {
             asset.investmentCostPerUnit = NSDecimalNumber(decimal: investmentCostPerUnit)
+        }
+        if let investmentContractMultiplier {
+            asset.investmentContractMultiplier = NSDecimalNumber(decimal: investmentContractMultiplier)
         }
         if let marketPrice {
             asset.marketPrice = NSDecimalNumber(decimal: marketPrice)

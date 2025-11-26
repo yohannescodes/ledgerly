@@ -17,11 +17,19 @@ struct AlphaVantageClient: MarketDataClient {
         var quotes: [PriceService.MarketQuote] = []
         for symbol in symbols { // simple sequential fetch to respect rate limits
             guard let url = URL(string: "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=\(symbol)&apikey=\(apiKey)") else { continue }
-            let (data, _) = try await session.data(from: url)
+            print("[AlphaVantageClient] Request: \(url.absoluteString)")
+            let (data, urlResponse) = try await session.data(from: url)
+            if let http = urlResponse as? HTTPURLResponse {
+                print("[AlphaVantageClient] Status: \(http.statusCode)")
+            }
+            if let raw = String(data: data, encoding: .utf8) {
+                print("[AlphaVantageClient] Raw response for \(symbol): \(raw)")
+            }
             let response = try JSONDecoder().decode(GlobalQuoteResponse.self, from: data)
             if let quote = response.quote,
                let price = Decimal(string: quote.price) {
                 quotes.append(.init(symbol: symbol.uppercased(), price: price, currencyCode: quote.currency ?? "USD", provider: "AlphaVantage"))
+                print("[AlphaVantageClient] Parsed quote for \(symbol.uppercased()): price=\(price) currency=\(quote.currency ?? "USD")")
             }
             try await Task.sleep(nanoseconds: 400_000_000) // ~0.4s pause to avoid hitting limits
         }

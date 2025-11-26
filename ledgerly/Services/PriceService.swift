@@ -134,6 +134,7 @@ final class ManualInvestmentPriceService {
     private let persistence: PersistenceController
     private let session: URLSession
     private let coinApiKey: String?
+    private let alphaClient: AlphaVantageClient?
 
     private enum Provider: String {
         case crypto
@@ -143,40 +144,64 @@ final class ManualInvestmentPriceService {
     private init(
         persistence: PersistenceController = .shared,
         session: URLSession = .shared,
-        coinApiKey: String? = ProcessInfo.processInfo.environment["COINGECKO_API_KEY"]
+        coinApiKey: String? = ProcessInfo.processInfo.environment["COINGECKO_API_KEY"],
+        alphaApiKey: String? = ProcessInfo.processInfo.environment["ALPHAVANTAGE_API_KEY"]
     ) {
         self.persistence = persistence
         self.session = session
         self.coinApiKey = coinApiKey
+        if let alphaApiKey, !alphaApiKey.isEmpty {
+            self.alphaClient = AlphaVantageClient(apiKey: alphaApiKey, session: session)
+        } else {
+            self.alphaClient = nil
+        }
     }
 
-    func refresh(baseCurrency: String) async {
-        let descriptors = fetchInvestmentDescriptors()
+    func refresh(baseCurrency: String, assetIDs: [NSManagedObjectID]? = nil) async {
+        let descriptors = fetchInvestmentDescriptors(filteredBy: assetIDs)
         guard !descriptors.isEmpty else { return }
         let cryptoIDs = Array(Set(descriptors.filter { $0.provider == .crypto }.map { $0.identifier.lowercased() }))
         let stockIDs = Array(Set(descriptors.filter { $0.provider == .stock }.map { $0.identifier.uppercased() }))
-        print("[ManualInvestmentPriceService] Refreshing crypto: \(cryptoIDs). Stock refresh disabled for: \(stockIDs)")
-        let cryptoQuotes = (try? await fetchCryptoPrices(for: cryptoIDs)) ?? [:]
+        if stockIDs.isEmpty {
+            print("[ManualInvestmentPriceService] No stock holdings to refresh.")
+        } else if alphaClient == nil {
+            print("[ManualInvestmentPriceService] Missing ALPHAVANTAGE_API_KEY, stock refresh skipped for: \(stockIDs)")
+        } else {
+            print("[ManualInvestmentPriceService] Refreshing stocks via Alpha Vantage: \(stockIDs)")
+        }
+        print("[ManualInvestmentPriceService] Refreshing crypto via CoinGecko: \(cryptoIDs)")
+        async let cryptoTask = fetchCryptoPrices(for: cryptoIDs)
+        async let stockTask = fetchStockQuotes(for: stockIDs)
+        let cryptoQuotes = (try? await cryptoTask) ?? [:]
+        let stockQuotes = await stockTask
         let context = persistence.newBackgroundContext()
         await context.perform {
             let converter = CurrencyConverter.fromSettings(in: context)
             for descriptor in descriptors {
                 guard let asset = try? context.existingObject(with: descriptor.objectID) as? ManualAsset else { continue }
-                let quotedPriceUSD: Decimal?
+                let providerQuote: ProviderQuote?
+                var appliedMultiplier: Decimal = 1
                 switch descriptor.provider {
                 case .crypto:
                     if let usd = cryptoQuotes[descriptor.identifier.lowercased()] {
-                        quotedPriceUSD = Decimal(usd)
+                        providerQuote = ProviderQuote(price: Decimal(usd), currencyCode: "USD")
                     } else {
-                        quotedPriceUSD = nil
+                        providerQuote = nil
                     }
                 case .stock:
-                    quotedPriceUSD = nil
+                    if let baseQuote = stockQuotes[descriptor.identifier.uppercased()] {
+                        let storedMultiplier = asset.investmentContractMultiplier as Decimal? ?? 1
+                        let multiplier = storedMultiplier > 0 ? storedMultiplier : 1
+                        providerQuote = ProviderQuote(price: baseQuote.price * multiplier, currencyCode: baseQuote.currencyCode)
+                        appliedMultiplier = multiplier
+                    } else {
+                        providerQuote = nil
+                    }
                 }
-                guard let priceUSD = quotedPriceUSD else { continue }
+                guard let quote = providerQuote else { continue }
                 let assetCurrencyRaw = asset.currencyCode ?? converter.baseCurrency
                 let assetCurrencyCode = assetCurrencyRaw.uppercased()
-                let priceInBase = converter.convertToBase(priceUSD, currency: "USD")
+                let priceInBase = converter.convertToBase(quote.price, currency: quote.currencyCode)
                 let localizedPrice: Decimal
                 if assetCurrencyCode == converter.baseCurrency.uppercased() {
                     localizedPrice = priceInBase
@@ -187,6 +212,7 @@ final class ManualInvestmentPriceService {
                 }
                 let quantity = descriptor.quantity
                 let newValue = localizedPrice * quantity
+                print("[ManualInvestmentPriceService] Quote applied for \(descriptor.identifier): raw=\(quote.price) \(quote.currencyCode) multiplier=\(appliedMultiplier) localizedPrice=\(localizedPrice) quantity=\(quantity) newValue=\(newValue)")
                 asset.marketPrice = NSDecimalNumber(decimal: localizedPrice)
                 asset.marketPriceCurrencyCode = assetCurrencyRaw
                 asset.marketPriceUpdatedAt = Date()
@@ -196,7 +222,8 @@ final class ManualInvestmentPriceService {
         }
     }
 
-    private func fetchInvestmentDescriptors() -> [InvestmentDescriptor] {
+    private func fetchInvestmentDescriptors(filteredBy specificIDs: [NSManagedObjectID]? = nil) -> [InvestmentDescriptor] {
+        let filterSet = specificIDs.map { Set($0) }
         let context = persistence.container.viewContext
         var results: [InvestmentDescriptor] = []
         context.performAndWait {
@@ -204,6 +231,7 @@ final class ManualInvestmentPriceService {
             request.predicate = NSPredicate(format: "type CONTAINS[cd] %@ AND investmentCoinID != nil", "investment")
             if let assets = try? context.fetch(request) {
                 results = assets.compactMap { asset in
+                    if let filterSet, !filterSet.contains(asset.objectID) { return nil }
                     guard let identifier = asset.investmentCoinID,
                           let quantity = asset.investmentQuantity as Decimal? else { return nil }
                     let provider = Provider(rawValue: asset.investmentProvider ?? Provider.crypto.rawValue) ?? .crypto
@@ -239,10 +267,28 @@ final class ManualInvestmentPriceService {
         }
     }
 
+    private func fetchStockQuotes(for tickers: [String]) async -> [String: PriceService.MarketQuote] {
+        guard let alphaClient, !tickers.isEmpty else { return [:] }
+        do {
+            let quotes = try await alphaClient.fetchQuotes(for: tickers)
+            return quotes.reduce(into: [String: PriceService.MarketQuote]()) { partialResult, quote in
+                partialResult[quote.symbol.uppercased()] = quote
+            }
+        } catch {
+            print("[ManualInvestmentPriceService] AlphaVantage error: \(error.localizedDescription)")
+            return [:]
+        }
+    }
+
     private struct InvestmentDescriptor {
         let objectID: NSManagedObjectID
         let provider: Provider
         let identifier: String
         let quantity: Decimal
+    }
+
+    private struct ProviderQuote {
+        let price: Decimal
+        let currencyCode: String
     }
 }

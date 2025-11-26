@@ -6,6 +6,8 @@ struct HomeOverviewView: View {
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @EnvironmentObject private var transactionsStore: TransactionsStore
     @State private var showingDashboardPreferences = false
+    @State private var showingManualEntries = false
+    @State private var refreshingStocks = false
 
     var body: some View {
         ScrollView {
@@ -30,15 +32,43 @@ struct HomeOverviewView: View {
         .navigationTitle(dashboardTitle)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { showingManualEntries = true }) {
+                    Image(systemName: "square.and.pencil")
+                        .accessibilityLabel("Edit manual entries")
+                }
+                Button(action: refreshStocks) {
+                    if refreshingStocks {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
+                    Text("")
+                        .hidden()
+                }
+                .accessibilityLabel(refreshingStocks ? "Refreshing prices" : "Refresh stock prices")
+                .disabled(refreshingStocks)
                 Button(action: { showingDashboardPreferences = true }) {
                     Label("Customize", systemImage: "slider.horizontal.3")
+                        .labelStyle(.iconOnly)
                 }
             }
         }
         .sheet(isPresented: $showingDashboardPreferences) {
             NavigationStack {
                 DashboardPreferencesView()
+            }
+        }
+        .sheet(isPresented: $showingManualEntries) {
+            NavigationStack {
+                ManualEntriesView()
+                    .navigationTitle("Manual Entries")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingManualEntries = false }
+                        }
+                    }
             }
         }
         .task(id: appSettingsStore.snapshot.baseCurrencyCode) {
@@ -75,6 +105,18 @@ struct HomeOverviewView: View {
             ExpenseBreakdownCard()
         case .incomeProgress:
             IncomeProgressCard()
+        }
+    }
+
+    private func refreshStocks() {
+        guard !refreshingStocks else { return }
+        refreshingStocks = true
+        Task {
+            await ManualInvestmentPriceService.shared.refresh(baseCurrency: appSettingsStore.snapshot.baseCurrencyCode)
+            await MainActor.run {
+                refreshingStocks = false
+                netWorthStore.reload()
+            }
         }
     }
 }

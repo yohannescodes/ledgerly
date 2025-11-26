@@ -1,2 +1,5 @@
 .DS_Store
 /xcuserdata
+ledgerly.xcodeproj/xcuserdata/
+ledgerly.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate

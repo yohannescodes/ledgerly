@@ -37,7 +37,7 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 
 ### Services
 - `NetWorthService` aggregates wallets, manual entries, and liabilities into live net-worth totals and snapshots.
-- `PriceService` and `ManualInvestmentPriceService` maintain deterministic local prices and optional remote quotes (CoinGecko or custom clients) for manual investments.
+- `PriceService` and `ManualInvestmentPriceService` maintain deterministic local prices and optional remote quotes (CoinGecko for crypto, Alpha Vantage for stocks) for manual investments.
 - `DataBackupService` and `DataExportService` create JSON backups, import payloads, and refresh stores after restores.
 - `BudgetAlertService` and `GoalReminderService` hook into `UNUserNotificationCenter` when alerts are enabled.
 
@@ -83,6 +83,8 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 ### Manual Entries
 - Assets, receivables, investments, and liabilities share a dedicated list with Core Data fetch requests scoped per type.
 - Investment entry sheet captures symbol, quantity, cost basis, and provider kind (stock vs crypto) so pricing services know how to refresh it.
+- Stock entries also include a contract multiplier so you can scale Alpha Vantage quotes to match brokered index/CFD contract sizes.
+- Each stock row includes a "Refresh price" button that pings Alpha Vantage on demand (handy when you want to stay under their daily limits).
 - Any change refreshes `NetWorthStore` immediately so the dashboard stays in sync.
 
 ### Settings & Utilities
@@ -94,7 +96,7 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 - Base currency lives in `AppSettings` and drives all conversions, reports, and dashboard tiles.
 - Exchange modes: `official`, `parallel`, `manual`. Each wallet can still hold its own currency; conversions pass through the base currency via `CurrencyConverter`.
 - Manual overrides are stored per currency code and surfaced in Settings for quick edits.
-- `ManualInvestmentPriceService` tries to fetch fresh CoinGecko prices (crypto) and leaves hooks for other providers; `PriceService` generates deterministic local prices when offline.
+- `ManualInvestmentPriceService` fetches fresh CoinGecko prices for crypto and Alpha Vantage quotes for stocks (when API keys are set); `PriceService` generates deterministic local prices when offline.
 - Every transaction and investment records the actual rate snapshot that was used so history remains reproducible.
 
 ## Running the App
@@ -102,7 +104,7 @@ Ledgerly follows a simple but explicit layering that keeps the UI reactive while
 2. `git clone` this repository and open `ledgerly.xcodeproj` in Xcode.
 3. Select the `ledgerly` scheme and your preferred simulator (the sample screenshots use iPhone 16 Pro Max).
 4. Build & run. The onboarding flow will guide you through base currency and exchange-mode selection before showing the dashboard.
-5. Optional: if you want live CoinGecko prices, add `COINGECKO_API_KEY` to the scheme environment (otherwise deterministic local prices are used).
+5. Optional: if you want live quotes, add `COINGECKO_API_KEY` (crypto) and/or `ALPHAVANTAGE_API_KEY` (stocks) to the scheme environment – otherwise deterministic local prices are used.
 
 ### Troubleshooting
 - If Core Data migrations fail, delete the app from the simulator and rerun (no external dependencies to clean up).

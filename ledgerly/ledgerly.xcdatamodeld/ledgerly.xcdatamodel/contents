@@ -91,6 +91,7 @@
         <attribute name="investmentSymbol" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="investmentQuantity" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
         <attribute name="investmentCostPerUnit" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
+        <attribute name="investmentContractMultiplier" optional="YES" attributeType="Decimal" defaultValueString="1" usesScalarValueType="NO"/>
         <attribute name="marketPrice" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
         <attribute name="marketPriceCurrencyCode" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="marketPriceUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
