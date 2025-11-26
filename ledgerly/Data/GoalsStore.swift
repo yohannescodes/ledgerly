@@ -81,6 +81,32 @@ final class GoalsStore: ObservableObject {
         }
     }
 
+    func applyWalletDelta(walletID: NSManagedObjectID, amountDelta: Decimal) {
+        guard amountDelta != .zero else { return }
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let wallet = try? context.existingObject(with: walletID) as? Wallet else { return }
+            let request: NSFetchRequest<SavingGoal> = SavingGoal.fetchRequest()
+            request.predicate = NSPredicate(format: "wallet == %@", wallet)
+            guard let goals = try? context.fetch(request), !goals.isEmpty else { return }
+            for goal in goals {
+                let target = goal.targetAmount as Decimal? ?? .zero
+                let current = goal.currentAmount as Decimal? ?? .zero
+                let updated = current + amountDelta
+                let adjusted: Decimal
+                if target > .zero {
+                    adjusted = min(max(updated, 0), target)
+                } else {
+                    adjusted = max(updated, 0)
+                }
+                goal.currentAmount = NSDecimalNumber(decimal: adjusted)
+                self.updateStatus(for: goal, targetAmount: target)
+            }
+            try? context.save()
+            Task { @MainActor in self.reload() }
+        }
+    }
+
     private func performWrite(goalID: NSManagedObjectID, mutate: @escaping (SavingGoal) -> Void) {
         let context = persistence.newBackgroundContext()
         context.perform {

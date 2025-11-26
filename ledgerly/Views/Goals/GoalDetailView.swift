@@ -154,15 +154,11 @@ struct GoalDetailView: View {
     }
 
     private var progressPercentage: Int {
-        Int(clampedProgress * 100)
+        currentGoal.progressPercentage
     }
 
     private var clampedProgress: Double {
-        let target = NSDecimalNumber(decimal: currentGoal.targetAmount)
-        guard target != .zero else { return 0 }
-        let current = NSDecimalNumber(decimal: currentGoal.currentAmount)
-        let ratio = current.dividing(by: target).doubleValue
-        return min(max(ratio, 0), 1)
+        currentGoal.progressFraction
     }
 
     private var recommendedMonthlyContribution: Decimal? {

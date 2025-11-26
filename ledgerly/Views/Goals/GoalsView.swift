@@ -146,7 +146,7 @@ struct GoalsView: View {
     }
 
     private var averageProgress: Double {
-        let values = goalsStore.goals.map { min(max((($0.progress as NSDecimalNumber).doubleValue / 100), 0), 1) }
+        let values = goalsStore.goals.map(\.progressFraction)
         guard !values.isEmpty else { return 0 }
         return values.reduce(0, +) / Double(values.count)
     }
@@ -166,7 +166,7 @@ struct GoalsView: View {
                 Spacer()
                 statusBadge(for: goal)
             }
-            ProgressView(value: min(max((goal.progress as NSDecimalNumber).doubleValue / 100, 0), 1))
+            ProgressView(value: goal.progressFraction)
                 .tint(goal.status.lowercased() == "completed" ? .green : .accentColor)
             HStack {
                 Text("\(formatCurrency(goal.currentAmount, code: goal.currencyCode)) saved")

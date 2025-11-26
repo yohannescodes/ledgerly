@@ -85,6 +85,7 @@ struct HomeOverviewView: View {
         .environmentObject(NetWorthStore(persistence: PersistenceController.preview))
         .environmentObject(TransactionsStore(persistence: PersistenceController.preview))
         .environmentObject(BudgetsStore(persistence: PersistenceController.preview))
+        .environmentObject(WalletsStore(persistence: PersistenceController.preview))
         .environmentObject(GoalsStore(persistence: PersistenceController.preview))
 }
 

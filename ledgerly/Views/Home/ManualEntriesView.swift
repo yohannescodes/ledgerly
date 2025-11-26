@@ -5,6 +5,8 @@ struct ManualEntriesView: View {
     @Environment(\.managedObjectContext) private var context
     @EnvironmentObject private var netWorthStore: NetWorthStore
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @EnvironmentObject private var walletsStore: WalletsStore
+    @EnvironmentObject private var goalsStore: GoalsStore
 
     @FetchRequest(
         sortDescriptors: [SortDescriptor(\.valuationDate, order: .reverse)],
@@ -120,13 +122,21 @@ struct ManualEntriesView: View {
             }
         }
         .sheet(isPresented: $showingInvestmentForm) {
-            InvestmentEntryFormView(title: "New Investment", baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode) { entry in
+            InvestmentEntryFormView(
+                title: "New Investment",
+                baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
+                wallets: walletsStore.wallets
+            ) { entry in
+                guard let walletID = entry.walletID,
+                      let wallet = try? context.existingObject(with: walletID) as? Wallet else { return }
                 let identifier = formattedIdentifier(for: entry)
+                let initialValue = estimatedValue(for: entry, currentMarketPrice: nil)
+                adjustWalletBalance(walletID: wallet.objectID, amount: -initialValue)
                 ManualAsset.create(
                     in: context,
                     name: entry.name,
                     type: "investment",
-                    value: entry.quantity * entry.costPerUnit,
+                    value: initialValue,
                     currencyCode: entry.currencyCode,
                     includeInCore: true,
                     includeInTangible: false,
@@ -137,10 +147,12 @@ struct ManualEntriesView: View {
                     investmentQuantity: entry.quantity,
                     investmentCostPerUnit: entry.costPerUnit,
                     marketPrice: entry.costPerUnit,
-                    marketPriceCurrencyCode: entry.currencyCode
+                    marketPriceCurrencyCode: entry.currencyCode,
+                    fundingWallet: wallet
                 )
                 try? context.save()
                 netWorthStore.reload()
+                walletsStore.reload()
             }
         }
         .sheet(isPresented: $showingLiabilityForm) {
@@ -189,6 +201,7 @@ struct ManualEntriesView: View {
                 InvestmentEntryFormView(
                     title: "Edit Investment",
                     baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
+                    wallets: walletsStore.wallets,
                     entry: ManualInvestmentInput(
                         kind: (investment.investmentProvider == ManualInvestmentInput.Kind.stock.rawValue) ? .stock : .crypto,
                         name: investment.name ?? "",
@@ -196,10 +209,13 @@ struct ManualEntriesView: View {
                         symbol: investment.investmentSymbol ?? "",
                         quantity: investment.investmentQuantity as Decimal? ?? .zero,
                         costPerUnit: investment.investmentCostPerUnit as Decimal? ?? .zero,
-                        currencyCode: investment.currencyCode ?? appSettingsStore.snapshot.baseCurrencyCode
+                        currencyCode: investment.currencyCode ?? appSettingsStore.snapshot.baseCurrencyCode,
+                        walletID: investment.wallet?.objectID
                     ),
                     onSave: { entry in
                         let identifier = formattedIdentifier(for: entry)
+                        let newValue = estimatedValue(for: entry, currentMarketPrice: investment.marketPrice as Decimal?)
+                        applyInvestmentEditAdjustments(original: investment, input: entry, newValue: newValue)
                         investment.name = entry.name
                         investment.investmentProvider = entry.kind.rawValue
                         investment.investmentCoinID = identifier
@@ -207,15 +223,24 @@ struct ManualEntriesView: View {
                         investment.investmentQuantity = NSDecimalNumber(decimal: entry.quantity)
                         investment.investmentCostPerUnit = NSDecimalNumber(decimal: entry.costPerUnit)
                         investment.currencyCode = entry.currencyCode
-                        investment.value = NSDecimalNumber(decimal: entry.quantity * entry.costPerUnit)
+                        investment.value = NSDecimalNumber(decimal: newValue)
+                        if let walletID = entry.walletID,
+                           let wallet = try? context.existingObject(with: walletID) as? Wallet {
+                            investment.wallet = wallet
+                        } else {
+                            investment.wallet = nil
+                        }
                         try? context.save()
                         netWorthStore.reload()
+                        walletsStore.reload()
                         investmentToEdit = nil
                     },
                     onDelete: {
+                        releaseFunds(for: investment)
                         context.delete(investment)
                         try? context.save()
                         netWorthStore.reload()
+                        walletsStore.reload()
                         investmentToEdit = nil
                     }
                 )
@@ -270,9 +295,62 @@ struct ManualEntriesView: View {
     }
 
     private func deleteInvestment(at offsets: IndexSet) {
-        offsets.map { investments[$0] }.forEach(context.delete)
+        offsets.map { investments[$0] }.forEach { investment in
+            releaseFunds(for: investment)
+            context.delete(investment)
+        }
         try? context.save()
         netWorthStore.reload()
+        walletsStore.reload()
+    }
+
+    private func applyInvestmentEditAdjustments(original: ManualAsset, input: ManualInvestmentInput, newValue: Decimal) {
+        let previousWalletID = original.wallet?.objectID
+        let previousValue = assetValue(for: original)
+        let previousQuantity = original.investmentQuantity as Decimal? ?? .zero
+        let newQuantity = input.quantity
+
+        if let previousWalletID, let newWalletID = input.walletID, previousWalletID == newWalletID {
+            guard previousQuantity != newQuantity else { return }
+            adjustWalletBalance(walletID: previousWalletID, amount: previousValue - newValue)
+        } else {
+            if let previousWalletID {
+                adjustWalletBalance(walletID: previousWalletID, amount: previousValue)
+            }
+            if let newWalletID = input.walletID {
+                adjustWalletBalance(walletID: newWalletID, amount: -newValue)
+            }
+        }
+    }
+
+    private func releaseFunds(for investment: ManualAsset) {
+        guard let walletID = investment.wallet?.objectID else { return }
+        let currentValue = assetValue(for: investment)
+        adjustWalletBalance(walletID: walletID, amount: currentValue)
+    }
+
+    private func investmentCostBasis(for asset: ManualAsset) -> Decimal {
+        let quantity = asset.investmentQuantity as Decimal? ?? .zero
+        let costPerUnit = asset.investmentCostPerUnit as Decimal? ?? .zero
+        return quantity * costPerUnit
+    }
+
+    private func assetValue(for asset: ManualAsset) -> Decimal {
+        (asset.value as Decimal?) ?? investmentCostBasis(for: asset)
+    }
+
+    private func estimatedValue(for input: ManualInvestmentInput, currentMarketPrice: Decimal?) -> Decimal {
+        let referencePrice = currentMarketPrice ?? input.costPerUnit
+        return input.quantity * referencePrice
+    }
+
+    private func adjustWalletBalance(walletID: NSManagedObjectID, amount: Decimal) {
+        guard amount != .zero,
+              let wallet = try? context.existingObject(with: walletID) as? Wallet else { return }
+        let currentBalance = wallet.currentBalance as Decimal? ?? .zero
+        wallet.currentBalance = NSDecimalNumber(decimal: currentBalance + amount)
+        wallet.updatedAt = Date()
+        goalsStore.applyWalletDelta(walletID: walletID, amountDelta: amount)
     }
 
     private func formattedIdentifier(for entry: ManualInvestmentInput) -> String {
@@ -431,6 +509,7 @@ struct ManualInvestmentInput {
     var quantity: Decimal
     var costPerUnit: Decimal
     var currencyCode: String
+    var walletID: NSManagedObjectID?
 
     init(
         kind: Kind = .crypto,
@@ -439,7 +518,8 @@ struct ManualInvestmentInput {
         symbol: String = "",
         quantity: Decimal = .zero,
         costPerUnit: Decimal = .zero,
-        currencyCode: String
+        currencyCode: String,
+        walletID: NSManagedObjectID? = nil
     ) {
         self.kind = kind
         self.name = name
@@ -448,24 +528,37 @@ struct ManualInvestmentInput {
         self.quantity = quantity
         self.costPerUnit = costPerUnit
         self.currencyCode = currencyCode
+        self.walletID = walletID
+    }
+
+    var totalCostBasis: Decimal {
+        quantity * costPerUnit
     }
 }
 
 struct InvestmentEntryFormView: View {
     let title: String
     let baseCurrencyCode: String
+    let wallets: [WalletModel]
     let onSave: (ManualInvestmentInput) -> Void
     let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var input: ManualInvestmentInput
 
-    init(title: String, baseCurrencyCode: String, entry: ManualInvestmentInput? = nil, onSave: @escaping (ManualInvestmentInput) -> Void, onDelete: (() -> Void)? = nil) {
+    init(title: String, baseCurrencyCode: String, wallets: [WalletModel], entry: ManualInvestmentInput? = nil, onSave: @escaping (ManualInvestmentInput) -> Void, onDelete: (() -> Void)? = nil) {
         self.title = title
         self.baseCurrencyCode = baseCurrencyCode
+        self.wallets = wallets
         self.onSave = onSave
         self.onDelete = onDelete
-        _input = State(initialValue: entry ?? ManualInvestmentInput(currencyCode: baseCurrencyCode))
+        let defaultWalletID = entry?.walletID ?? wallets.first?.id
+        if var entry = entry {
+            entry.walletID = entry.walletID ?? defaultWalletID
+            _input = State(initialValue: entry)
+        } else {
+            _input = State(initialValue: ManualInvestmentInput(currencyCode: baseCurrencyCode, walletID: defaultWalletID))
+        }
     }
 
     var body: some View {
@@ -514,6 +607,21 @@ struct InvestmentEntryFormView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("Funding Wallet") {
+                    if wallets.isEmpty {
+                        Text("Create a wallet first from the Wallets tab to fund this investment.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("Wallet", selection: $input.walletID) {
+                            ForEach(wallets) { wallet in
+                                Text("\(wallet.name) (\(wallet.currencyCode))")
+                                    .tag(Optional(wallet.id))
+                            }
+                        }
+                    }
+                }
+
                 if let onDelete {
                     Section {
                         Button(role: .destructive) {
@@ -539,7 +647,7 @@ struct InvestmentEntryFormView: View {
     }
 
     private var canSave: Bool {
-        !input.name.isEmpty && !input.coinID.isEmpty && input.quantity > 0 && input.costPerUnit > 0
+        !input.name.isEmpty && !input.coinID.isEmpty && input.quantity > 0 && input.costPerUnit > 0 && input.walletID != nil && !wallets.isEmpty
     }
 
     private func save() {

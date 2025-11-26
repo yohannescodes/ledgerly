@@ -22,7 +22,6 @@ struct SavingGoalModel: Identifiable, Hashable {
     let currentAmount: Decimal
     let deadline: Date?
     let status: String
-    let progress: Decimal
 }
 
 extension MonthlyBudgetModel {
@@ -49,7 +48,22 @@ extension SavingGoalModel {
         currentAmount = managedObject.currentAmount as Decimal? ?? .zero
         deadline = managedObject.deadline
         status = managedObject.status ?? "active"
-        progress = targetAmount == .zero ? 0 : (currentAmount / targetAmount) * 100
+    }
+}
+
+extension SavingGoalModel {
+    /// Returns the goal's completion between 0 and 1, clamped for invalid values.
+    var progressFraction: Double {
+        let targetAmountNumber = NSDecimalNumber(decimal: targetAmount)
+        guard targetAmountNumber != .zero else { return 0 }
+        let currentAmountNumber = NSDecimalNumber(decimal: currentAmount)
+        let ratio = currentAmountNumber.dividing(by: targetAmountNumber).doubleValue
+        return min(max(ratio, 0), 1)
+    }
+
+    /// Convenience for displaying a percentage (0 - 100) derived from ``progressFraction``.
+    var progressPercentage: Int {
+        Int(progressFraction * 100)
     }
 }
 

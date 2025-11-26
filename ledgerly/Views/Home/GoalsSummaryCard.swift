@@ -12,9 +12,9 @@ struct GoalsSummaryCard: View {
                     HStack {
                         Text(goal.name)
                         Spacer()
-                        Text("\(Int(goal.progress as NSDecimalNumber))%")
+                        Text("\(goal.progressPercentage)%")
                     }
-                    ProgressView(value: min(max((goal.progress as NSDecimalNumber).doubleValue / 100, 0), 1))
+                    ProgressView(value: goal.progressFraction)
                     if let deadline = goal.deadline {
                         Text("Due in \(daysRemaining(until: deadline)) days")
                             .font(.caption2)

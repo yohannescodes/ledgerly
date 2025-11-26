@@ -67,6 +67,7 @@ struct LedgerlyBackup: Codable {
         let marketPrice: Decimal?
         let marketPriceCurrencyCode: String?
         let marketPriceUpdatedAt: Date?
+        let walletIdentifier: String?
     }
 
     struct ManualLiabilityRecord: Codable {
@@ -274,7 +275,8 @@ final class DataBackupService {
                 investmentCostPerUnit: asset.investmentCostPerUnit as Decimal?,
                 marketPrice: asset.marketPrice as Decimal?,
                 marketPriceCurrencyCode: asset.marketPriceCurrencyCode,
-                marketPriceUpdatedAt: asset.marketPriceUpdatedAt
+                marketPriceUpdatedAt: asset.marketPriceUpdatedAt,
+                walletIdentifier: asset.wallet?.identifier
             )
         }
     }
@@ -436,6 +438,11 @@ final class DataBackupService {
             }
             asset.marketPriceCurrencyCode = record.marketPriceCurrencyCode
             asset.marketPriceUpdatedAt = record.marketPriceUpdatedAt
+            if let walletID = record.walletIdentifier {
+                asset.wallet = try fetchEntity(Wallet.self, identifier: walletID, in: context)
+            } else {
+                asset.wallet = nil
+            }
         }
     }
 

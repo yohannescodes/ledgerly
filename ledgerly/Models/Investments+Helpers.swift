@@ -84,6 +84,8 @@ struct ManualAssetModel: Identifiable, Hashable {
     let marketPrice: Decimal?
     let marketPriceCurrencyCode: String?
     let marketPriceUpdatedAt: Date?
+    let walletID: NSManagedObjectID?
+    let walletName: String?
 }
 
 struct ManualLiabilityModel: Identifiable, Hashable {
@@ -227,6 +229,8 @@ extension ManualAssetModel {
         marketPrice = managedObject.marketPrice as Decimal?
         marketPriceCurrencyCode = managedObject.marketPriceCurrencyCode
         marketPriceUpdatedAt = managedObject.marketPriceUpdatedAt
+        walletID = managedObject.wallet?.objectID
+        walletName = managedObject.wallet?.name
     }
 }
 
@@ -402,7 +406,8 @@ extension ManualAsset {
         investmentQuantity: Decimal? = nil,
         investmentCostPerUnit: Decimal? = nil,
         marketPrice: Decimal? = nil,
-        marketPriceCurrencyCode: String? = nil
+        marketPriceCurrencyCode: String? = nil,
+        fundingWallet: Wallet? = nil
     ) -> ManualAsset {
         let asset = ManualAsset(context: context)
         asset.identifier = UUID().uuidString
@@ -427,6 +432,7 @@ extension ManualAsset {
             asset.marketPrice = NSDecimalNumber(decimal: marketPrice)
         }
         asset.marketPriceCurrencyCode = marketPriceCurrencyCode
+        asset.wallet = fundingWallet
         return asset
     }
 }

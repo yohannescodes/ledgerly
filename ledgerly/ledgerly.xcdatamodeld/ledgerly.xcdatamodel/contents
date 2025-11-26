@@ -94,6 +94,7 @@
         <attribute name="marketPrice" optional="YES" attributeType="Decimal" usesScalarValueType="NO"/>
         <attribute name="marketPriceCurrencyCode" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="marketPriceUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="wallet" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Wallet" inverseName="manualAssets" inverseEntity="Wallet"/>
     </entity>
     <entity name="ManualLiability" representedClassName="ManualLiability" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
@@ -158,6 +159,7 @@
         <relationship name="transactions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Transaction" inverseName="wallet" inverseEntity="Transaction"/>
         <relationship name="transferPeers" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Transaction" inverseName="counterpartyWallet" inverseEntity="Transaction"/>
         <relationship name="goals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SavingGoal" inverseName="wallet" inverseEntity="SavingGoal"/>
+        <relationship name="manualAssets" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="ManualAsset" inverseName="wallet" inverseEntity="ManualAsset"/>
     </entity>
     <entity name="MonthlyBudget" representedClassName="MonthlyBudget" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
