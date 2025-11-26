@@ -1,6 +1,6 @@
 # ledgerly
 
-ledgerly is an offline-first SwiftUI personal finance app that keeps every record on-device while still giving you wallets, budgets, goals, manual assets, liabilities, investments, and currency-aware analytics.
+ledgerly is an offline-first SwiftUI personal finance app that keeps every record on-device while still giving you wallets, budgets, goals, manual assets, liabilities, investments, and currency-aware analytics. <br>
 <a href="https://www.producthunt.com/products/github-224?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-ledgerly" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1041480&theme=dark&t=1764162628406" alt="ledgerly - a&#0032;net&#0045;worth&#0045;centered&#0032;expense&#0032;tracker&#0032;app | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 ## Contributing
 Read `CONTRIBUTING.md` for collaboration guidelines, coding standards, and the review checklist.
