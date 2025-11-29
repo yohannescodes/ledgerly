@@ -62,7 +62,13 @@ struct TransactionsView: View {
         .sheet(item: $selectedTransaction) { transaction in
             NavigationStack {
                 TransactionDetailView(model: transaction) { action in
-                    viewModel.handle(action: action, for: transaction)
+                    let result = viewModel.handle(action: action, for: transaction)
+                    if case .delete = action {
+                        selectedTransaction = nil
+                    } else if let updated = result {
+                        selectedTransaction = updated
+                    }
+                    return result
                 }
             }
         }

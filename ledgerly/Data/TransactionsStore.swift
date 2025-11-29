@@ -122,6 +122,63 @@ final class TransactionsStore: ObservableObject {
         }
     }
 
+    func updateTransaction(id: NSManagedObjectID, change: TransactionEditChange) -> TransactionModel? {
+        let context = persistence.newBackgroundContext()
+        var updatedModel: TransactionModel?
+        context.performAndWait {
+            guard let transaction = try? context.existingObject(with: id) as? Transaction else { return }
+            let converter = CurrencyConverter.fromSettings(in: context)
+            apply(change: change, to: transaction, converter: converter, context: context)
+            transaction.updatedAt = Date()
+            do {
+                try context.save()
+                updatedModel = TransactionModel(managedObject: transaction)
+            } catch {
+                context.rollback()
+                assertionFailure("Failed to update transaction: \(error)")
+            }
+        }
+        if updatedModel != nil {
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+            }
+        }
+        return updatedModel
+    }
+
+    private func apply(change: TransactionEditChange, to transaction: Transaction, converter: CurrencyConverter, context: NSManagedObjectContext) {
+        switch change {
+        case .direction(let direction):
+            transaction.direction = direction.rawValue
+            transaction.isTransfer = (direction == .transfer)
+        case .amount(let amount):
+            transaction.amount = NSDecimalNumber(decimal: amount)
+            let base = converter.convertToBase(amount, currency: transaction.currencyCode)
+            transaction.convertedAmountBase = NSDecimalNumber(decimal: base)
+        case .currency(let code):
+            transaction.currencyCode = code
+            let amount = transaction.amount as Decimal? ?? .zero
+            let base = converter.convertToBase(amount, currency: code)
+            transaction.convertedAmountBase = NSDecimalNumber(decimal: base)
+        case .wallet(let walletID):
+            if let wallet = try? context.existingObject(with: walletID) as? Wallet {
+                transaction.wallet = wallet
+            }
+        case .date(let date):
+            transaction.date = date
+        case .notes(let notes):
+            let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            transaction.notes = trimmed.isEmpty ? nil : trimmed
+        case .category(let categoryID):
+            if let categoryID,
+               let category = try? context.existingObject(with: categoryID) as? Category {
+                transaction.category = category
+            } else {
+                transaction.category = nil
+            }
+        }
+    }
+
     func fetchSections(filter: TransactionFilter) -> [TransactionSection] {
         let context = persistence.container.viewContext
         var sections: [TransactionSection] = []
