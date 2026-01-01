@@ -78,7 +78,8 @@ extension Transaction {
         convertedAmountBase: Decimal,
         date: Date,
         wallet: Wallet,
-        category: Category?
+        category: Category?,
+        counterpartyWallet: Wallet? = nil
     ) -> Transaction {
         let transaction = Transaction(context: context)
         transaction.identifier = identifier
@@ -89,6 +90,7 @@ extension Transaction {
         transaction.date = date
         transaction.wallet = wallet
         transaction.category = category
+        transaction.counterpartyWallet = counterpartyWallet
         transaction.isTransfer = (direction == "transfer")
         transaction.createdAt = Date()
         transaction.updatedAt = Date()
