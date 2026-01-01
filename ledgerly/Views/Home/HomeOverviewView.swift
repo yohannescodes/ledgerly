@@ -174,7 +174,7 @@ struct ExpenseBreakdownCard: View {
                         .font(.headline)
                     HStack(spacing: 8) {
                         Text(CurrencyFormatter.string(for: totals.currentTotal, code: appSettingsStore.snapshot.baseCurrencyCode))
-                            .font(.title3.bold())
+                            .font(.title3)
                         changeBadge
                     }
                 }
@@ -301,14 +301,17 @@ struct IncomeProgressCard: View {
     @EnvironmentObject private var transactionsStore: TransactionsStore
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
     @State private var entries: [TransactionsStore.IncomeProgressEntry] = []
+    @State private var hasEarlierData = false
     @State private var barAnimationProgress: CGFloat = 0
+    @State private var displayedYear: Int = Calendar.current.component(.year, from: Date())
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Income Progress (12M)")
+                Text(headerTitle)
                     .font(.headline)
                 Spacer()
+                navigationButtons
                 if let latest = entries.last {
                     Text(CurrencyFormatter.string(for: latest.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
                         .font(.subheadline.bold())
@@ -338,7 +341,7 @@ struct IncomeProgressCard: View {
                 .animation(.spring(response: 0.9, dampingFraction: 0.75), value: barAnimationProgress)
 
                 HStack {
-                    Text("Year-to-date")
+                    Text("Year total")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -357,7 +360,9 @@ struct IncomeProgressCard: View {
     }
 
     private func reload() {
-        entries = transactionsStore.fetchMonthlyIncomeProgress()
+        let result = transactionsStore.fetchIncomeProgress(forYear: displayedYear)
+        entries = result.entries
+        hasEarlierData = result.hasEarlierData
         restartBarAnimation()
     }
 
@@ -369,6 +374,40 @@ struct IncomeProgressCard: View {
         barAnimationProgress = 0
         withAnimation(.spring(response: 0.9, dampingFraction: 0.8)) {
             barAnimationProgress = 1
+        }
+    }
+
+    private var headerTitle: String {
+        "Income Progress (\(displayedYear))"
+    }
+
+    private var currentYear: Int {
+        Calendar.current.component(.year, from: Date())
+    }
+
+    private var canGoForward: Bool { displayedYear < currentYear }
+
+    private var navigationButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                displayedYear -= 1
+                reload()
+            } label: {
+                Label("Previous", systemImage: "chevron.left")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.plain)
+            .disabled(!hasEarlierData)
+
+            Button {
+                displayedYear = min(displayedYear + 1, currentYear)
+                reload()
+            } label: {
+                Label("Next", systemImage: "chevron.right")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canGoForward)
         }
     }
 
