@@ -18,7 +18,9 @@ struct TransactionModel: Identifiable, Hashable {
     let notes: String?
     let walletName: String
     let walletCurrency: String
+    let walletID: NSManagedObjectID?
     let category: DisplayCategory?
+    let categoryID: NSManagedObjectID?
 
     var signedAmount: Decimal {
         switch direction.lowercased() {
@@ -49,11 +51,13 @@ extension TransactionModel {
         notes = managedObject.notes
         walletName = managedObject.wallet?.name ?? "Wallet"
         walletCurrency = managedObject.wallet?.baseCurrencyCode ?? currencyCode
+        walletID = managedObject.wallet?.objectID
         if let cat = managedObject.category {
             category = DisplayCategory(name: cat.name ?? "Category", colorHex: cat.colorHex, iconName: cat.iconName)
         } else {
             category = nil
         }
+        categoryID = managedObject.category?.objectID
     }
 }
 
@@ -74,7 +78,8 @@ extension Transaction {
         convertedAmountBase: Decimal,
         date: Date,
         wallet: Wallet,
-        category: Category?
+        category: Category?,
+        counterpartyWallet: Wallet? = nil
     ) -> Transaction {
         let transaction = Transaction(context: context)
         transaction.identifier = identifier
@@ -85,6 +90,7 @@ extension Transaction {
         transaction.date = date
         transaction.wallet = wallet
         transaction.category = category
+        transaction.counterpartyWallet = counterpartyWallet
         transaction.isTransfer = (direction == "transfer")
         transaction.createdAt = Date()
         transaction.updatedAt = Date()

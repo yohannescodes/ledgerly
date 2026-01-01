@@ -40,13 +40,19 @@ final class TransactionsViewModel: ObservableObject {
         }
     }
 
-    func handle(action: TransactionDetailAction, for model: TransactionModel) {
+    @discardableResult
+    func handle(action: TransactionDetailAction, for model: TransactionModel) -> TransactionModel? {
         switch action {
         case .delete:
             store.deleteTransaction(id: model.id)
             refresh()
+            return nil
+        case .update(let change):
+            let updated = store.updateTransaction(id: model.id, change: change)
+            refresh()
+            return updated
         case .none:
-            break
+            return nil
         }
     }
 
@@ -76,4 +82,5 @@ final class TransactionsViewModel: ObservableObject {
 enum TransactionDetailAction {
     case none
     case delete
+    case update(TransactionEditChange)
 }

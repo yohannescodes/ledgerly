@@ -80,6 +80,14 @@ final class TransactionsStore: ObservableObject {
             let converter = CurrencyConverter.fromSettings(in: context)
             let baseAmount = converter.convertToBase(input.amount, currency: input.currencyCode)
             let category = input.categoryID.flatMap { try? context.existingObject(with: $0) as? Category }
+            let destinationWallet: Wallet?
+            if input.direction == .transfer,
+               let destinationID = input.destinationWalletID,
+               let destination = try? context.existingObject(with: destinationID) as? Wallet {
+                destinationWallet = destination
+            } else {
+                destinationWallet = nil
+            }
             _ = Transaction.create(
                 in: context,
                 direction: input.direction.rawValue,
@@ -88,14 +96,13 @@ final class TransactionsStore: ObservableObject {
                 convertedAmountBase: baseAmount,
                 date: input.date,
                 wallet: wallet,
-                category: category
+                category: category,
+                counterpartyWallet: destinationWallet
             )
             self.adjust(wallet: wallet, by: input.amount, currency: input.currencyCode, direction: input.direction, converter: converter)
 
-            if input.direction == .transfer,
-               let destinationID = input.destinationWalletID,
-               let destination = try? context.existingObject(with: destinationID) as? Wallet {
-                self.adjustTransfer(to: destination, amount: input.amount, currency: input.currencyCode, converter: converter)
+            if let destinationWallet {
+                self.adjustTransfer(to: destinationWallet, amount: input.amount, currency: input.currencyCode, converter: converter)
             }
 
             do {
@@ -114,10 +121,77 @@ final class TransactionsStore: ObservableObject {
         let context = persistence.newBackgroundContext()
         context.perform {
             guard let transaction = try? context.existingObject(with: id) as? Transaction else { return }
+            let converter = CurrencyConverter.fromSettings(in: context)
+            let state = TransactionBalanceState(transaction: transaction, converter: converter)
+            self.applyWalletAdjustments(for: state, converter: converter, multiplier: Decimal(-1))
             context.delete(transaction)
             try? context.save()
             Task { @MainActor in
                 NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+            }
+        }
+    }
+
+    func updateTransaction(id: NSManagedObjectID, change: TransactionEditChange) -> TransactionModel? {
+        let context = persistence.newBackgroundContext()
+        var updatedModel: TransactionModel?
+        context.performAndWait {
+            guard let transaction = try? context.existingObject(with: id) as? Transaction else { return }
+            let converter = CurrencyConverter.fromSettings(in: context)
+            let previousState = TransactionBalanceState(transaction: transaction, converter: converter)
+            apply(change: change, to: transaction, converter: converter, context: context)
+            if changeAffectsWalletBalance(change) {
+                applyBalanceAdjustments(previousState: previousState, transaction: transaction, converter: converter)
+            }
+            transaction.updatedAt = Date()
+            do {
+                try context.save()
+                updatedModel = TransactionModel(managedObject: transaction)
+            } catch {
+                context.rollback()
+                assertionFailure("Failed to update transaction: \(error)")
+            }
+        }
+        if updatedModel != nil {
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+            }
+        }
+        return updatedModel
+    }
+
+    private func apply(change: TransactionEditChange, to transaction: Transaction, converter: CurrencyConverter, context: NSManagedObjectContext) {
+        switch change {
+        case .direction(let direction):
+            transaction.direction = direction.rawValue
+            transaction.isTransfer = (direction == .transfer)
+            if direction != .transfer {
+                transaction.counterpartyWallet = nil
+            }
+        case .amount(let amount):
+            transaction.amount = NSDecimalNumber(decimal: amount)
+            let base = converter.convertToBase(amount, currency: transaction.currencyCode)
+            transaction.convertedAmountBase = NSDecimalNumber(decimal: base)
+        case .currency(let code):
+            transaction.currencyCode = code
+            let amount = transaction.amount as Decimal? ?? .zero
+            let base = converter.convertToBase(amount, currency: code)
+            transaction.convertedAmountBase = NSDecimalNumber(decimal: base)
+        case .wallet(let walletID):
+            if let wallet = try? context.existingObject(with: walletID) as? Wallet {
+                transaction.wallet = wallet
+            }
+        case .date(let date):
+            transaction.date = date
+        case .notes(let notes):
+            let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            transaction.notes = trimmed.isEmpty ? nil : trimmed
+        case .category(let categoryID):
+            if let categoryID,
+               let category = try? context.existingObject(with: categoryID) as? Category {
+                transaction.category = category
+            } else {
+                transaction.category = nil
             }
         }
     }
@@ -287,27 +361,91 @@ final class TransactionsStore: ObservableObject {
     }
 
     private func adjust(wallet: Wallet, by amount: Decimal, currency: String, direction: TransactionFormInput.Direction, converter: CurrencyConverter) {
-        let baseAmount = converter.convertToBase(amount, currency: currency)
-        let walletCurrency = wallet.baseCurrencyCode ?? converter.baseCurrency
-        let walletAmount = converter.convertFromBase(baseAmount, to: walletCurrency)
-        let current = wallet.currentBalance as Decimal? ?? .zero
-        switch direction {
-        case .expense:
-            wallet.currentBalance = NSDecimalNumber(decimal: current - walletAmount)
-        case .income:
-            wallet.currentBalance = NSDecimalNumber(decimal: current + walletAmount)
-        case .transfer:
-            wallet.currentBalance = NSDecimalNumber(decimal: current - walletAmount)
-        }
-        wallet.updatedAt = Date()
+        let delta = walletDelta(amount: amount, currency: currency, direction: direction, wallet: wallet, converter: converter)
+        applyWalletDelta(delta, to: wallet)
     }
 
     private func adjustTransfer(to wallet: Wallet, amount: Decimal, currency: String, converter: CurrencyConverter) {
+        let delta = walletDelta(amount: amount, currency: currency, direction: .income, wallet: wallet, converter: converter)
+        applyWalletDelta(delta, to: wallet)
+    }
+
+    private func applyBalanceAdjustments(previousState: TransactionBalanceState, transaction: Transaction, converter: CurrencyConverter) {
+        applyWalletAdjustments(for: previousState, converter: converter, multiplier: Decimal(-1))
+        let newState = TransactionBalanceState(transaction: transaction, converter: converter)
+        applyWalletAdjustments(for: newState, converter: converter, multiplier: Decimal(1))
+    }
+
+    private func applyWalletAdjustments(for state: TransactionBalanceState, converter: CurrencyConverter, multiplier: Decimal) {
+        if let wallet = state.wallet {
+            let delta = walletDelta(
+                amount: state.amount,
+                currency: state.currencyCode,
+                direction: state.direction,
+                wallet: wallet,
+                converter: converter
+            ) * multiplier
+            applyWalletDelta(delta, to: wallet)
+        }
+        if state.isTransfer, let counterparty = state.counterpartyWallet {
+            let counterpartyDelta = walletDelta(
+                amount: state.amount,
+                currency: state.currencyCode,
+                direction: .income,
+                wallet: counterparty,
+                converter: converter
+            ) * multiplier
+            applyWalletDelta(counterpartyDelta, to: counterparty)
+        }
+    }
+
+    private func walletDelta(amount: Decimal, currency: String, direction: TransactionFormInput.Direction, wallet: Wallet, converter: CurrencyConverter) -> Decimal {
         let baseAmount = converter.convertToBase(amount, currency: currency)
         let walletCurrency = wallet.baseCurrencyCode ?? converter.baseCurrency
         let walletAmount = converter.convertFromBase(baseAmount, to: walletCurrency)
+        switch direction {
+        case .expense, .transfer:
+            return -walletAmount
+        case .income:
+            return walletAmount
+        }
+    }
+
+    private func applyWalletDelta(_ delta: Decimal, to wallet: Wallet) {
         let current = wallet.currentBalance as Decimal? ?? .zero
-        wallet.currentBalance = NSDecimalNumber(decimal: current + walletAmount)
+        wallet.currentBalance = NSDecimalNumber(decimal: current + delta)
         wallet.updatedAt = Date()
+    }
+
+    private func changeAffectsWalletBalance(_ change: TransactionEditChange) -> Bool {
+        switch change {
+        case .direction, .amount, .currency, .wallet:
+            return true
+        case .date, .notes, .category:
+            return false
+        }
+    }
+
+    private struct TransactionBalanceState {
+        let wallet: Wallet?
+        let counterpartyWallet: Wallet?
+        let direction: TransactionFormInput.Direction
+        let amount: Decimal
+        let currencyCode: String
+
+        var isTransfer: Bool { direction == .transfer }
+
+        init(transaction: Transaction, converter: CurrencyConverter) {
+            wallet = transaction.wallet
+            counterpartyWallet = transaction.counterpartyWallet
+            if let rawDirection = transaction.direction,
+               let parsed = TransactionFormInput.Direction(rawValue: rawDirection) {
+                direction = parsed
+            } else {
+                direction = .expense
+            }
+            amount = transaction.amount as Decimal? ?? .zero
+            currencyCode = transaction.currencyCode ?? converter.baseCurrency
+        }
     }
 }
