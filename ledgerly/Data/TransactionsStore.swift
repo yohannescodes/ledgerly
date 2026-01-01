@@ -281,24 +281,38 @@ final class TransactionsStore: ObservableObject {
         }
     }
 
-    func fetchMonthlyIncomeProgress(monthCount: Int = 12) -> [IncomeProgressEntry] {
+    func fetchIncomeProgress(forYear year: Int = Calendar.current.component(.year, from: Date())) -> (entries: [IncomeProgressEntry], hasEarlierData: Bool) {
         let context = persistence.container.viewContext
-        var buckets: [Date: Decimal] = [:]
+        let converter = CurrencyConverter.fromSettings(in: context)
+        var buckets: [Int: Decimal] = [:]
+        var hasEarlierMonths = false
         context.performAndWait {
             let calendar = Calendar.current
-            let now = Date()
-            guard let windowStart = calendar.date(byAdding: .month, value: -(monthCount - 1), to: startOfMonth(for: now)) else { return }
+            guard
+                let windowStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+                let windowEnd = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1))
+            else { return }
             let request = Transaction.fetchRequestAll()
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 NSPredicate(format: "direction == %@", "income"),
-                NSPredicate(format: "date >= %@", windowStart as NSDate)
+                NSPredicate(format: "date >= %@", windowStart as NSDate),
+                NSPredicate(format: "date < %@", windowEnd as NSDate)
             ])
             do {
                 let results = try context.fetch(request)
                 let models = results.map(TransactionModel.init)
                 for model in models {
-                    let bucketDate = startOfMonth(for: model.date)
-                    buckets[bucketDate, default: .zero] += model.convertedAmountBase
+                    let month = calendar.component(.month, from: model.date)
+                    let baseAmount = converter.convertToBase(model.amount, currency: model.currencyCode)
+                    buckets[month, default: .zero] += baseAmount
+                }
+                let earlierRequest = Transaction.fetchRequestAll(limit: 1)
+                earlierRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                    NSPredicate(format: "direction == %@", "income"),
+                    NSPredicate(format: "date < %@", windowStart as NSDate)
+                ])
+                if let results = try? context.fetch(earlierRequest) {
+                    hasEarlierMonths = !results.isEmpty
                 }
             } catch {
                 assertionFailure("Failed to fetch income progress: \(error)")
@@ -306,13 +320,12 @@ final class TransactionsStore: ObservableObject {
         }
 
         let calendar = Calendar.current
-        let start = startOfMonth(for: Date())
-        return (0..<monthCount).compactMap { offset in
-            guard let month = calendar.date(byAdding: .month, value: -(monthCount - 1 - offset), to: start) else { return nil }
-            let normalizedMonth = startOfMonth(for: month)
-            let amount = buckets[normalizedMonth] ?? .zero
-            return IncomeProgressEntry(monthStart: normalizedMonth, amount: amount)
+        let entries: [IncomeProgressEntry] = (1...12).compactMap { month in
+            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: 1)) else { return nil }
+            let amount = buckets[month] ?? .zero
+            return IncomeProgressEntry(monthStart: date, amount: amount)
         }
+        return (entries, hasEarlierMonths)
     }
 
     private func startOfMonth(for date: Date) -> Date {

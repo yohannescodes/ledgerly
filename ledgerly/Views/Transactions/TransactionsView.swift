@@ -23,7 +23,7 @@ struct TransactionsView: View {
                     ForEach(viewModel.sections) { section in
                         Section(header: sectionHeader(for: section)) {
                             ForEach(section.transactions) { transaction in
-                                TransactionRow(model: transaction)
+                                TransactionRow(model: transaction, converter: currencyConverter, baseCurrencyCode: baseCurrencyCode)
                                     .contentShape(Rectangle())
                                     .onTapGesture { selectedTransaction = transaction }
                             }
@@ -88,10 +88,10 @@ struct TransactionsView: View {
     private var summaryHeader: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
-                SummaryTile(title: "This Month", amount: viewModel.currentMonthTotal, color: .blue, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
-                SummaryTile(title: "Last Month", amount: viewModel.previousMonthTotal, color: .gray, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
-                SummaryTile(title: "Income", amount: viewModel.currentIncomeTotal, color: .green, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
-                SummaryTile(title: "Expenses", amount: viewModel.currentExpenseTotal, color: .red, currencyCode: appSettingsStore.snapshot.baseCurrencyCode)
+                SummaryTile(title: "This Month", amount: currentMonthTotal, color: .blue, currencyCode: baseCurrencyCode)
+                SummaryTile(title: "Last Month", amount: previousMonthTotal, color: .gray, currencyCode: baseCurrencyCode)
+                SummaryTile(title: "Income", amount: incomeTotal, color: .green, currencyCode: baseCurrencyCode)
+                SummaryTile(title: "Expenses", amount: expenseTotal, color: .red, currencyCode: baseCurrencyCode)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -102,17 +102,45 @@ struct TransactionsView: View {
         HStack {
             Text(section.date, style: .date)
             Spacer()
-            Text(section.total as NSNumber, formatter: currencyFormatter)
+            Text(formatCurrency(baseTotal(for: section), code: baseCurrencyCode))
                 .font(.subheadline)
-                .foregroundStyle(section.total >= 0 ? .green : .red)
+                .foregroundStyle(baseTotal(for: section) >= 0 ? .green : .red)
         }
     }
 
-    private var currencyFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = appSettingsStore.snapshot.baseCurrencyCode
-        return formatter
+    private var baseCurrencyCode: String { appSettingsStore.snapshot.baseCurrencyCode }
+    private var currencyConverter: CurrencyConverter {
+        CurrencyConverter(baseCurrency: baseCurrencyCode, rates: appSettingsStore.snapshot.exchangeRates)
+    }
+    private var allTransactions: [TransactionModel] {
+        viewModel.sections.flatMap { $0.transactions }
+    }
+    private var currentMonthTotal: Decimal {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        return sumTransactions(from: startOfMonth, to: now)
+    }
+    private var previousMonthTotal: Decimal {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        let previousStart = calendar.date(byAdding: .month, value: -1, to: startOfMonth) ?? now
+        return sumTransactions(from: previousStart, to: startOfMonth)
+    }
+    private var incomeTotal: Decimal {
+        allTransactions
+            .filter { $0.direction == "income" }
+            .reduce(.zero) { partial, model in
+                partial + currencyConverter.convertToBase(model.amount, currency: model.currencyCode)
+            }
+    }
+    private var expenseTotal: Decimal {
+        allTransactions
+            .filter { $0.direction == "expense" }
+            .reduce(.zero) { partial, model in
+                partial + currencyConverter.convertToBase(model.amount, currency: model.currencyCode)
+            }
     }
 
     private var emptyState: some View {
@@ -127,6 +155,38 @@ struct TransactionsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private extension TransactionsView {
+    func sumTransactions(from start: Date, to end: Date) -> Decimal {
+        allTransactions
+            .filter { $0.date >= start && $0.date <= end }
+            .reduce(.zero) { partial, model in
+                partial + signedBaseAmount(for: model)
+            }
+    }
+
+    func baseTotal(for section: TransactionSection) -> Decimal {
+        section.transactions.reduce(.zero) { partial, model in
+            partial + signedBaseAmount(for: model)
+        }
+    }
+
+    func signedBaseAmount(for model: TransactionModel) -> Decimal {
+        let baseAmount = currencyConverter.convertToBase(model.amount, currency: model.currencyCode)
+        switch model.direction.lowercased() {
+        case "expense": return -baseAmount
+        case "transfer": return .zero
+        default: return baseAmount
+        }
+    }
+}
+
+private func formatCurrency(_ value: Decimal, code: String) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .currency
+    formatter.currencyCode = code
+    return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "--"
 }
 
 private struct SummaryTile: View {
@@ -151,6 +211,6 @@ private struct SummaryTile: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
-        return formatter.string(from: value as NSNumber) ?? "--"
+        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "--"
     }
 }
