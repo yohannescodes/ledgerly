@@ -103,6 +103,8 @@ struct HomeOverviewView: View {
             )
         case .expenseBreakdown:
             ExpenseBreakdownCard()
+        case .spendingCadence:
+            SpendingCadenceCard()
         case .incomeProgress:
             IncomeProgressCard()
         }

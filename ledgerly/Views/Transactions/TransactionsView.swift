@@ -8,8 +8,8 @@ struct TransactionsView: View {
     @State private var showingCreateSheet = false
     @State private var selectedTransaction: TransactionModel?
 
-    init(store: TransactionsStore) {
-        _viewModel = StateObject(wrappedValue: TransactionsViewModel(store: store))
+    init(store: TransactionsStore, filter: TransactionFilter = TransactionFilter()) {
+        _viewModel = StateObject(wrappedValue: TransactionsViewModel(store: store, initialFilter: filter))
     }
 
     var body: some View {
