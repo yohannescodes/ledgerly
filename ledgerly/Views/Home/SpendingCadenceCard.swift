@@ -18,24 +18,9 @@ struct SpendingCadenceCard: View {
                 }
             }
             HStack(spacing: 12) {
-                CadenceTile(
-                    title: display.today.label,
-                    total: display.today.currentTotal,
-                    previousTotal: display.today.previousTotal,
-                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
-                )
-                CadenceTile(
-                    title: display.week.label,
-                    total: display.week.currentTotal,
-                    previousTotal: display.week.previousTotal,
-                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
-                )
-                CadenceTile(
-                    title: display.month.label,
-                    total: display.month.currentTotal,
-                    previousTotal: display.month.previousTotal,
-                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
-                )
+                cadenceLink(for: display.today)
+                cadenceLink(for: display.week)
+                cadenceLink(for: display.month)
             }
         }
         .padding()
@@ -79,6 +64,28 @@ struct SpendingCadenceCard: View {
         snapshot.today.currentTotal == .zero &&
             snapshot.week.currentTotal == .zero &&
             snapshot.month.currentTotal == .zero
+    }
+
+    private func cadenceLink(for period: TransactionsStore.SpendingCadenceSnapshot.PeriodTotal) -> some View {
+        NavigationLink {
+            TransactionsView(store: transactionsStore, filter: filter(for: period))
+        } label: {
+            CadenceTile(
+                title: period.label,
+                total: period.currentTotal,
+                previousTotal: period.previousTotal,
+                currencyCode: appSettingsStore.snapshot.baseCurrencyCode
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func filter(for period: TransactionsStore.SpendingCadenceSnapshot.PeriodTotal) -> TransactionFilter {
+        var filter = TransactionFilter()
+        filter.segment = .expenses
+        filter.startDate = period.start
+        filter.endDate = period.end
+        return filter
     }
 }
 

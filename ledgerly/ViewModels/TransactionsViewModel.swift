@@ -13,8 +13,9 @@ final class TransactionsViewModel: ObservableObject {
 
     private let store: TransactionsStore
 
-    init(store: TransactionsStore) {
+    init(store: TransactionsStore, initialFilter: TransactionFilter = TransactionFilter()) {
         self.store = store
+        self.filter = initialFilter
         refresh()
     }
 
