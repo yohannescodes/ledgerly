@@ -17,10 +17,13 @@ struct SpendingCadenceCard: View {
                         .font(.subheadline)
                 }
             }
-            HStack(spacing: 12) {
-                cadenceLink(for: display.today)
-                cadenceLink(for: display.week)
-                cadenceLink(for: display.month)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    cadenceLink(for: display.today)
+                    cadenceLink(for: display.week)
+                    cadenceLink(for: display.month)
+                }
+                .padding(.vertical, 2)
             }
         }
         .padding()
@@ -102,12 +105,10 @@ private struct CadenceTile: View {
                 .foregroundStyle(.secondary)
             Text(CurrencyFormatter.string(for: total, code: currencyCode))
                 .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .fixedSize(horizontal: true, vertical: false)
             changeBadge
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
     }
 
