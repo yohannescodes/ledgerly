@@ -66,6 +66,20 @@ final class TransactionsStore: ObservableObject {
         let previousTotal: Decimal
     }
 
+    struct SpendingCadenceSnapshot {
+        struct PeriodTotal {
+            let label: String
+            let start: Date
+            let end: Date
+            let currentTotal: Decimal
+            let previousTotal: Decimal
+        }
+
+        let today: PeriodTotal
+        let week: PeriodTotal
+        let month: PeriodTotal
+    }
+
     struct IncomeProgressEntry: Identifiable {
         let id = UUID()
         let monthStart: Date
@@ -260,6 +274,72 @@ final class TransactionsStore: ObservableObject {
             previous = totalExpenses(from: previousStart, to: startOfMonth, context: context, converter: converter)
         }
         return ExpenseTotals(currentTotal: current, previousTotal: previous)
+    }
+
+    func fetchSpendingCadence(referenceDate: Date = Date()) -> SpendingCadenceSnapshot {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        let calendar = Calendar.current
+        var todayTotal = SpendingCadenceSnapshot.PeriodTotal(
+            label: "Today",
+            start: referenceDate,
+            end: referenceDate,
+            currentTotal: .zero,
+            previousTotal: .zero
+        )
+        var weekTotal = SpendingCadenceSnapshot.PeriodTotal(
+            label: "This Week",
+            start: referenceDate,
+            end: referenceDate,
+            currentTotal: .zero,
+            previousTotal: .zero
+        )
+        var monthTotal = SpendingCadenceSnapshot.PeriodTotal(
+            label: "This Month",
+            start: referenceDate,
+            end: referenceDate,
+            currentTotal: .zero,
+            previousTotal: .zero
+        )
+        context.performAndWait {
+            let now = referenceDate
+            let dayStart = calendar.startOfDay(for: now)
+            let dayEnd = now
+            let previousDayStart = calendar.date(byAdding: .day, value: -1, to: dayStart) ?? dayStart
+
+            let weekInterval = calendar.dateInterval(of: .weekOfYear, for: now)
+            let weekStart = weekInterval?.start ?? dayStart
+            let weekEnd = now
+            let previousWeekStart = calendar.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+
+            let monthInterval = calendar.dateInterval(of: .month, for: now)
+            let monthStart = monthInterval?.start ?? dayStart
+            let monthEnd = now
+            let previousMonthStart = calendar.date(byAdding: .month, value: -1, to: monthStart) ?? monthStart
+
+            todayTotal = SpendingCadenceSnapshot.PeriodTotal(
+                label: "Today",
+                start: dayStart,
+                end: dayEnd,
+                currentTotal: totalExpenses(from: dayStart, to: dayEnd, context: context, converter: converter),
+                previousTotal: totalExpenses(from: previousDayStart, to: dayStart, context: context, converter: converter)
+            )
+            weekTotal = SpendingCadenceSnapshot.PeriodTotal(
+                label: "This Week",
+                start: weekStart,
+                end: weekEnd,
+                currentTotal: totalExpenses(from: weekStart, to: weekEnd, context: context, converter: converter),
+                previousTotal: totalExpenses(from: previousWeekStart, to: weekStart, context: context, converter: converter)
+            )
+            monthTotal = SpendingCadenceSnapshot.PeriodTotal(
+                label: "This Month",
+                start: monthStart,
+                end: monthEnd,
+                currentTotal: totalExpenses(from: monthStart, to: monthEnd, context: context, converter: converter),
+                previousTotal: totalExpenses(from: previousMonthStart, to: monthStart, context: context, converter: converter)
+            )
+        }
+        return SpendingCadenceSnapshot(today: todayTotal, week: weekTotal, month: monthTotal)
     }
 
     private func totalExpenses(from start: Date, to end: Date, context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
