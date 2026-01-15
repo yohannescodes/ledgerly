@@ -1,0 +1,152 @@
+import SwiftUI
+
+struct SpendingCadenceCard: View {
+    @EnvironmentObject private var transactionsStore: TransactionsStore
+    @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @State private var snapshot: TransactionsStore.SpendingCadenceSnapshot?
+
+    var body: some View {
+        let display = snapshot ?? placeholderSnapshot
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Spending Cadence")
+                    .font(.headline)
+                if isEmptySnapshot(display) {
+                    Text("No expenses yet.")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                }
+            }
+            HStack(spacing: 12) {
+                CadenceTile(
+                    title: display.today.label,
+                    total: display.today.currentTotal,
+                    previousTotal: display.today.previousTotal,
+                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
+                )
+                CadenceTile(
+                    title: display.week.label,
+                    total: display.week.currentTotal,
+                    previousTotal: display.week.previousTotal,
+                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
+                )
+                CadenceTile(
+                    title: display.month.label,
+                    total: display.month.currentTotal,
+                    previousTotal: display.month.previousTotal,
+                    currencyCode: appSettingsStore.snapshot.baseCurrencyCode
+                )
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .onAppear(perform: reload)
+        .onChange(of: appSettingsStore.snapshot) { _ in reload() }
+    }
+
+    private func reload() {
+        snapshot = transactionsStore.fetchSpendingCadence()
+    }
+
+    private var placeholderSnapshot: TransactionsStore.SpendingCadenceSnapshot {
+        let now = Date()
+        return TransactionsStore.SpendingCadenceSnapshot(
+            today: TransactionsStore.SpendingCadenceSnapshot.PeriodTotal(
+                label: "Today",
+                start: now,
+                end: now,
+                currentTotal: .zero,
+                previousTotal: .zero
+            ),
+            week: TransactionsStore.SpendingCadenceSnapshot.PeriodTotal(
+                label: "This Week",
+                start: now,
+                end: now,
+                currentTotal: .zero,
+                previousTotal: .zero
+            ),
+            month: TransactionsStore.SpendingCadenceSnapshot.PeriodTotal(
+                label: "This Month",
+                start: now,
+                end: now,
+                currentTotal: .zero,
+                previousTotal: .zero
+            )
+        )
+    }
+
+    private func isEmptySnapshot(_ snapshot: TransactionsStore.SpendingCadenceSnapshot) -> Bool {
+        snapshot.today.currentTotal == .zero &&
+            snapshot.week.currentTotal == .zero &&
+            snapshot.month.currentTotal == .zero
+    }
+}
+
+private struct CadenceTile: View {
+    let title: String
+    let total: Decimal
+    let previousTotal: Decimal
+    let currencyCode: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(CurrencyFormatter.string(for: total, code: currencyCode))
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            changeBadge
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var changeBadge: some View {
+        let delta = total - previousTotal
+        let percentage = previousTotal == .zero ? nil : (delta / previousTotal)
+        let arrow: String
+        let color: Color
+        if let percentage {
+            if percentage >= 0 {
+                arrow = "arrow.up"
+                color = .red
+            } else {
+                arrow = "arrow.down"
+                color = .green
+            }
+        } else {
+            arrow = "circle"
+            color = .secondary
+        }
+        let pctText: String
+        if let percentage {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .percent
+            formatter.maximumFractionDigits = 1
+            pctText = formatter.string(from: (percentage as NSDecimalNumber)) ?? "--"
+        } else if total == .zero {
+            pctText = "0%"
+        } else {
+            pctText = "--"
+        }
+        return HStack(spacing: 4) {
+            Image(systemName: arrow)
+            Text(pctText)
+        }
+        .font(.caption.bold())
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.15))
+        .clipShape(Capsule())
+        .foregroundStyle(color)
+    }
+}
+
+#Preview {
+    SpendingCadenceCard()
+        .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))
+        .environmentObject(TransactionsStore(persistence: PersistenceController.preview))
+}
