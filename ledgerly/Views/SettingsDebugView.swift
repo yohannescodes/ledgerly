@@ -17,6 +17,7 @@ struct SettingsDebugView: View {
     @State private var pendingRateCode: String? = nil
     @State private var pendingRateValue: Decimal = 1
     @State private var isEditingRate = false
+    @State private var showingNetWorthRebuild = false
 
     init(persistence: PersistenceController = PersistenceController.shared) {
         self.backupService = DataBackupService(persistence: persistence)
@@ -105,6 +106,17 @@ struct SettingsDebugView: View {
                     Label("Import Backup", systemImage: "arrow.down.doc")
                 }
             }
+
+            Section("Net Worth History") {
+                Button(role: .destructive) {
+                    showingNetWorthRebuild = true
+                } label: {
+                    Label("Rebuild Net Worth Snapshots", systemImage: "arrow.clockwise")
+                }
+                Text("Deletes existing snapshots and rebuilds monthly totals from January 2026 onward using transactions and manual assets. Uses current FX rates and valuations, so past months are approximate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
             handleImport(result: result)
@@ -128,6 +140,12 @@ struct SettingsDebugView: View {
         }
         .sheet(item: $exportedFile) { payload in
             ShareSheet(activityItems: [payload.url])
+        }
+        .alert("Rebuild Net Worth History?", isPresented: $showingNetWorthRebuild) {
+            Button("Rebuild", role: .destructive, action: rebuildNetWorthHistory)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will delete your existing net worth snapshots and recreate monthly totals from your data. This cannot be undone.")
         }
         .alert("Data Management", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
             Button("OK", role: .cancel) { alertMessage = nil }
@@ -180,6 +198,17 @@ struct SettingsDebugView: View {
         pendingRateValue = value ?? 1
         isEditingRate = (code != nil)
         showingRatePicker = true
+    }
+
+    private func rebuildNetWorthHistory() {
+        netWorthStore.rebuildMonthlySnapshots { result in
+            switch result {
+            case .success(let count):
+                alertMessage = "Rebuilt \(count) monthly snapshots."
+            case .failure:
+                alertMessage = "Failed to rebuild net worth snapshots."
+            }
+        }
     }
 
     private func formattedRate(_ value: Decimal) -> String {

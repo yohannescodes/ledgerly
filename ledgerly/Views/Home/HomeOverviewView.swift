@@ -99,8 +99,11 @@ struct HomeOverviewView: View {
         case .netWorthHistory:
             NetWorthHistoryCard(
                 totals: netWorthStore.liveTotals,
-                baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode
+                baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
+                snapshots: netWorthStore.snapshots
             )
+        case .financialHealth:
+            FinancialHealthCard()
         case .expenseBreakdown:
             ExpenseBreakdownCard()
         case .spendingCadence:
@@ -137,14 +140,24 @@ struct HomeOverviewView: View {
 
 struct ExpenseBreakdownCard: View {
     enum Range: String, CaseIterable, Identifiable {
+        case week
         case month
         case quarter
 
         var id: String { rawValue }
         var title: String {
             switch self {
+            case .week: return "7D"
             case .month: return "30D"
             case .quarter: return "90D"
+            }
+        }
+
+        var days: Int {
+            switch self {
+            case .week: return 7
+            case .month: return 30
+            case .quarter: return 90
             }
         }
 
@@ -152,6 +165,8 @@ struct ExpenseBreakdownCard: View {
             let calendar = Calendar.current
             let components: DateComponents
             switch self {
+            case .week:
+                components = DateComponents(day: -7)
             case .month:
                 components = DateComponents(day: -30)
             case .quarter:
@@ -174,11 +189,7 @@ struct ExpenseBreakdownCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Expense Breakdown")
                         .font(.headline)
-                    HStack(spacing: 8) {
-                        Text(CurrencyFormatter.string(for: totals.currentTotal, code: appSettingsStore.snapshot.baseCurrencyCode))
-                            .font(.title3)
-                        changeBadge
-                    }
+                    amountAndBadge
                 }
                 Spacer()
                 Picker("Range", selection: $range) {
@@ -187,7 +198,7 @@ struct ExpenseBreakdownCard: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 140)
+                .frame(width: 180)
             }
 
             if segments.isEmpty {
@@ -257,8 +268,10 @@ struct ExpenseBreakdownCard: View {
         return HStack(spacing: 4) {
             Image(systemName: arrow)
             Text(pctText)
+                .lineLimit(1)
         }
         .font(.caption.bold())
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(color.opacity(0.15))
@@ -268,7 +281,7 @@ struct ExpenseBreakdownCard: View {
 
     private func reload() {
         let breakdown = transactionsStore.fetchExpenseBreakdown(since: range.startDate)
-        totals = transactionsStore.fetchMonthlyExpenseTotals()
+        totals = transactionsStore.fetchExpenseTotals(days: range.days)
         let palette: [Color] = [.pink, .orange, .purple, .blue, .green, .yellow, .teal, .indigo]
         let mapped: [ExpenseSegment] = breakdown.enumerated().map { index, entry in
             let color = Color(hex: entry.colorHex ?? "") ?? palette[index % palette.count].opacity(0.85)
@@ -286,6 +299,28 @@ struct ExpenseBreakdownCard: View {
         pieAnimationProgress = 0
         withAnimation(.spring(response: 0.9, dampingFraction: 0.85)) {
             pieAnimationProgress = 1
+        }
+    }
+
+    private var amountText: some View {
+        Text(CurrencyFormatter.string(for: totals.currentTotal, code: appSettingsStore.snapshot.baseCurrencyCode))
+            .font(.title3)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .layoutPriority(1)
+    }
+
+    @ViewBuilder
+    private var amountAndBadge: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                amountText
+                changeBadge
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                amountText
+                changeBadge
+            }
         }
     }
 }
