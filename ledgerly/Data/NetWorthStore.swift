@@ -32,7 +32,13 @@ final class NetWorthStore: ObservableObject {
         request.sortDescriptors = [NSSortDescriptor(keyPath: \NetWorthSnapshot.timestamp, ascending: true)]
         do {
             let results = try context.fetch(request)
-            let models = results.map(NetWorthSnapshotModel.init)
+            let filteredResults: [NetWorthSnapshot]
+            if let startDate = service.snapshotStartDate {
+                filteredResults = results.filter { ($0.timestamp ?? .distantPast) >= startDate }
+            } else {
+                filteredResults = results
+            }
+            let models = filteredResults.map(NetWorthSnapshotModel.init)
             snapshots = models
             latestSnapshot = models.last
             displaySnapshots = Self.makeDisplaySnapshots(base: models, liveTotals: liveTotals)
@@ -41,6 +47,30 @@ final class NetWorthStore: ObservableObject {
             snapshots = []
             latestSnapshot = nil
             displaySnapshots = Self.makeDisplaySnapshots(base: [], liveTotals: liveTotals)
+        }
+    }
+
+    func fetchFxExposure() -> FxExposureSnapshot {
+        service.computeFxExposure()
+    }
+
+    func fetchManualInvestmentPerformance() -> ManualInvestmentPerformanceSnapshot? {
+        service.computeManualInvestmentPerformance()
+    }
+
+    func rebuildMonthlySnapshots(completion: @escaping (Result<Int, Error>) -> Void) {
+        Task.detached { [service] in
+            do {
+                let count = try service.rebuildMonthlySnapshots()
+                await MainActor.run {
+                    self.reload()
+                    completion(.success(count))
+                }
+            } catch {
+                await MainActor.run {
+                    completion(.failure(error))
+                }
+            }
         }
     }
 

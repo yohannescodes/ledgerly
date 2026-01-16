@@ -16,11 +16,35 @@ struct NetWorthTotals {
     var totalInvestments: Decimal { manualInvestments }
 }
 
+struct FxExposureSnapshot {
+    let foreignAssets: Decimal
+    let foreignLiabilities: Decimal
+    let totalAssets: Decimal
+    let totalLiabilities: Decimal
+
+    var netExposure: Decimal { foreignAssets - foreignLiabilities }
+    var foreignAssetShare: Decimal? { totalAssets == .zero ? nil : (foreignAssets / totalAssets) }
+}
+
+struct ManualInvestmentPerformanceSnapshot {
+    let totalCost: Decimal
+    let totalCurrentValue: Decimal
+    let totalProfit: Decimal
+    let investmentCount: Int
+
+    var returnPercent: Decimal? { totalCost == .zero ? nil : (totalProfit / totalCost) }
+}
+
 final class NetWorthService {
     private let persistence: PersistenceController
+    private let snapshotStartComponents = DateComponents(year: 2026, month: 1, day: 1)
 
     init(persistence: PersistenceController) {
         self.persistence = persistence
+    }
+
+    var snapshotStartDate: Date? {
+        Calendar.current.date(from: snapshotStartComponents)
     }
 
     func computeTotals() -> NetWorthTotals {
@@ -70,9 +94,25 @@ final class NetWorthService {
         )
     }
 
+    func rebuildMonthlySnapshots() throws -> Int {
+        let context = persistence.newBackgroundContext()
+        var outcome: Result<Int, Error> = .success(0)
+        context.performAndWait {
+            do {
+                outcome = .success(try rebuildMonthlySnapshots(in: context))
+            } catch {
+                outcome = .failure(error)
+            }
+        }
+        return try outcome.get()
+    }
+
     func ensureMonthlySnapshot() {
         let context = persistence.newBackgroundContext()
         context.perform {
+            let calendar = Calendar.current
+            guard let snapshotStart = calendar.date(from: self.snapshotStartComponents),
+                  Date() >= snapshotStart else { return }
             let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
             request.sortDescriptors = [NSSortDescriptor(keyPath: \NetWorthSnapshot.timestamp, ascending: false)]
             request.fetchLimit = 1
@@ -98,8 +138,104 @@ final class NetWorthService {
         }
     }
 
+    func computeFxExposure() -> FxExposureSnapshot {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        var foreignAssets: Decimal = .zero
+        var baseAssets: Decimal = .zero
+        var foreignLiabilities: Decimal = .zero
+        var baseLiabilities: Decimal = .zero
+
+        context.performAndWait {
+            let baseCode = converter.baseCurrency.uppercased()
+
+            let walletRequest: NSFetchRequest<Wallet> = Wallet.fetchRequest()
+            walletRequest.predicate = NSPredicate(format: "includeInNetWorth == YES")
+            if let wallets = try? context.fetch(walletRequest) {
+                for wallet in wallets {
+                    let code = (wallet.baseCurrencyCode ?? converter.baseCurrency).uppercased()
+                    let balance = wallet.currentBalance as Decimal? ?? .zero
+                    let converted = converter.convertToBase(balance, currency: code)
+                    if code == baseCode {
+                        baseAssets += converted
+                    } else {
+                        foreignAssets += converted
+                    }
+                }
+            }
+
+            let assetRequest: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
+            if let assets = try? context.fetch(assetRequest) {
+                for asset in assets {
+                    let code = (asset.currencyCode ?? converter.baseCurrency).uppercased()
+                    let value = asset.value as Decimal? ?? .zero
+                    let converted = converter.convertToBase(value, currency: code)
+                    if code == baseCode {
+                        baseAssets += converted
+                    } else {
+                        foreignAssets += converted
+                    }
+                }
+            }
+
+            let liabilityRequest: NSFetchRequest<ManualLiability> = ManualLiability.fetchRequest()
+            if let liabilities = try? context.fetch(liabilityRequest) {
+                for liability in liabilities {
+                    let code = (liability.currencyCode ?? converter.baseCurrency).uppercased()
+                    let balance = liability.balance as Decimal? ?? .zero
+                    let converted = converter.convertToBase(balance, currency: code)
+                    if code == baseCode {
+                        baseLiabilities += converted
+                    } else {
+                        foreignLiabilities += converted
+                    }
+                }
+            }
+        }
+
+        return FxExposureSnapshot(
+            foreignAssets: foreignAssets,
+            foreignLiabilities: foreignLiabilities,
+            totalAssets: baseAssets + foreignAssets,
+            totalLiabilities: baseLiabilities + foreignLiabilities
+        )
+    }
+
+    func computeManualInvestmentPerformance() -> ManualInvestmentPerformanceSnapshot? {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        var totalCost: Decimal = .zero
+        var totalCurrentValue: Decimal = .zero
+        var count = 0
+
+        context.performAndWait {
+            let request: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
+            guard let assets = try? context.fetch(request), !assets.isEmpty else { return }
+            for asset in assets where isManualInvestment(asset: asset) {
+                let quantity = asset.investmentQuantity as Decimal? ?? .zero
+                let costPerUnit = asset.investmentCostPerUnit as Decimal? ?? .zero
+                let costBasis = quantity * costPerUnit
+                let currentValue = (asset.value as Decimal?) ?? costBasis
+                let currency = asset.currencyCode ?? converter.baseCurrency
+                totalCost += converter.convertToBase(costBasis, currency: currency)
+                totalCurrentValue += converter.convertToBase(currentValue, currency: currency)
+                count += 1
+            }
+        }
+
+        guard count > 0 else { return nil }
+        let totalProfit = totalCurrentValue - totalCost
+        return ManualInvestmentPerformanceSnapshot(
+            totalCost: totalCost,
+            totalCurrentValue: totalCurrentValue,
+            totalProfit: totalProfit,
+            investmentCount: count
+        )
+    }
+
     private func sumManualAssets(
         in context: NSManagedObjectContext,
+        asOf date: Date? = nil,
         core: inout Decimal,
         tangible: inout Decimal,
         volatile: inout Decimal,
@@ -111,6 +247,9 @@ final class NetWorthService {
         guard let assets = try? context.fetch(request) else { return .zero }
         var total: Decimal = .zero
         for asset in assets {
+            if let date, let valuationDate = asset.valuationDate, valuationDate > date {
+                continue
+            }
             let value = converter.convertToBase(asset.value as Decimal? ?? .zero, currency: asset.currencyCode)
             total += value
             if asset.includeInCore { core += value }
@@ -124,6 +263,178 @@ final class NetWorthService {
             }
         }
         return total
+    }
+
+    private func sumWalletBalances(
+        asOf date: Date,
+        in context: NSManagedObjectContext,
+        converter: CurrencyConverter
+    ) -> Decimal {
+        let request: NSFetchRequest<Wallet> = Wallet.fetchRequest()
+        request.predicate = NSPredicate(format: "includeInNetWorth == YES")
+        guard let wallets = try? context.fetch(request), !wallets.isEmpty else { return .zero }
+        var balances: [NSManagedObjectID: Decimal] = [:]
+        var currencies: [NSManagedObjectID: String] = [:]
+        for wallet in wallets {
+            balances[wallet.objectID] = wallet.startingBalance as Decimal? ?? .zero
+            currencies[wallet.objectID] = wallet.baseCurrencyCode ?? converter.baseCurrency
+        }
+
+        let transactionRequest: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+        transactionRequest.predicate = NSPredicate(format: "date <= %@", date as NSDate)
+        if let transactions = try? context.fetch(transactionRequest) {
+            for transaction in transactions {
+                let amount = transaction.amount as Decimal? ?? .zero
+                let baseAmount = converter.convertToBase(amount, currency: transaction.currencyCode)
+                if let wallet = transaction.wallet, let currency = currencies[wallet.objectID] {
+                    let walletAmount = converter.convertFromBase(baseAmount, to: currency)
+                    let direction = (transaction.direction ?? "expense").lowercased()
+                    let delta: Decimal
+                    switch direction {
+                    case "income":
+                        delta = walletAmount
+                    case "expense", "transfer":
+                        delta = -walletAmount
+                    default:
+                        delta = walletAmount
+                    }
+                    balances[wallet.objectID, default: .zero] += delta
+                }
+                if (transaction.direction ?? "").lowercased() == "transfer",
+                   let counterparty = transaction.counterpartyWallet,
+                   let currency = currencies[counterparty.objectID] {
+                    let walletAmount = converter.convertFromBase(baseAmount, to: currency)
+                    balances[counterparty.objectID, default: .zero] += walletAmount
+                }
+            }
+        }
+
+        return wallets.reduce(.zero) { partial, wallet in
+            let balance = balances[wallet.objectID] ?? .zero
+            let currency = currencies[wallet.objectID] ?? converter.baseCurrency
+            return partial + converter.convertToBase(balance, currency: currency)
+        }
+    }
+
+    private func rebuildMonthlySnapshots(in context: NSManagedObjectContext) throws -> Int {
+        let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
+        let existing = try context.fetch(request)
+        existing.forEach { context.delete($0) }
+
+        let calendar = Calendar.current
+        guard let baseline = calendar.date(from: snapshotStartComponents) else { return 0 }
+        let earliest = earliestSnapshotDate(in: context) ?? baseline
+        let startDate = max(baseline, earliest)
+        let now = Date()
+        guard let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: startDate)) else {
+            try context.save()
+            return 0
+        }
+        guard startMonth <= now else {
+            try context.save()
+            return 0
+        }
+        let converter = CurrencyConverter.fromSettings(in: context)
+        var monthStart = startMonth
+        var created = 0
+        while monthStart <= now {
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else { break }
+            let snapshotDate: Date
+            if calendar.isDate(monthStart, equalTo: now, toGranularity: .month) {
+                snapshotDate = now
+            } else {
+                snapshotDate = nextMonth.addingTimeInterval(-1)
+            }
+            let totals = computeTotals(asOf: snapshotDate, in: context, converter: converter)
+            let snapshot = NetWorthSnapshot.create(
+                in: context,
+                totalAssets: totals.totalAssets,
+                totalLiabilities: totals.totalLiabilities,
+                coreNetWorth: totals.coreNetWorth,
+                tangibleNetWorth: totals.tangibleNetWorth,
+                volatileAssets: totals.volatileAssets
+            )
+            snapshot.timestamp = snapshotDate
+            created += 1
+            monthStart = nextMonth
+        }
+        try context.save()
+        return created
+    }
+
+    private func earliestSnapshotDate(in context: NSManagedObjectContext) -> Date? {
+        var dates: [Date] = []
+
+        let transactionRequest: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+        transactionRequest.sortDescriptors = [NSSortDescriptor(keyPath: \Transaction.date, ascending: true)]
+        transactionRequest.fetchLimit = 1
+        if let transaction = try? context.fetch(transactionRequest).first, let date = transaction.date {
+            dates.append(date)
+        }
+
+        let walletRequest: NSFetchRequest<Wallet> = Wallet.fetchRequest()
+        walletRequest.sortDescriptors = [NSSortDescriptor(keyPath: \Wallet.createdAt, ascending: true)]
+        walletRequest.fetchLimit = 1
+        if let wallet = try? context.fetch(walletRequest).first, let date = wallet.createdAt {
+            dates.append(date)
+        }
+
+        let assetRequest: NSFetchRequest<ManualAsset> = ManualAsset.fetchRequest()
+        assetRequest.sortDescriptors = [NSSortDescriptor(keyPath: \ManualAsset.valuationDate, ascending: true)]
+        assetRequest.fetchLimit = 1
+        if let asset = try? context.fetch(assetRequest).first, let valuationDate = asset.valuationDate {
+            dates.append(valuationDate)
+        }
+
+        return dates.min()
+    }
+
+    private func computeTotals(
+        asOf date: Date,
+        in context: NSManagedObjectContext,
+        converter: CurrencyConverter
+    ) -> NetWorthTotals {
+        var totalAssets: Decimal = .zero
+        var totalLiabilities: Decimal = .zero
+        var walletAssets: Decimal = .zero
+        var manualAssetsTotal: Decimal = .zero
+        var manualInvestments: Decimal = .zero
+        var receivables: Decimal = .zero
+        var coreAssets: Decimal = .zero
+        var tangibleAssets: Decimal = .zero
+        var volatileAssets: Decimal = .zero
+
+        walletAssets = sumWalletBalances(asOf: date, in: context, converter: converter)
+        manualAssetsTotal = sumManualAssets(
+            in: context,
+            asOf: date,
+            core: &coreAssets,
+            tangible: &tangibleAssets,
+            volatile: &volatileAssets,
+            receivables: &receivables,
+            manualInvestments: &manualInvestments,
+            converter: converter
+        )
+        totalLiabilities += sumManualLiabilities(in: context, converter: converter)
+
+        let tangibleAssetsNet = max(manualAssetsTotal - manualInvestments - receivables, .zero)
+        totalAssets = walletAssets + tangibleAssetsNet + receivables + manualInvestments
+
+        let coreNetWorth = coreAssets - totalLiabilities
+        let tangibleNetWorth = tangibleAssets - totalLiabilities
+        let netWorth = totalAssets - totalLiabilities
+        return NetWorthTotals(
+            totalAssets: totalAssets,
+            totalLiabilities: totalLiabilities,
+            netWorth: netWorth,
+            coreNetWorth: coreNetWorth,
+            tangibleNetWorth: tangibleNetWorth,
+            volatileAssets: volatileAssets,
+            walletAssets: walletAssets,
+            tangibleAssets: tangibleAssetsNet,
+            manualInvestments: manualInvestments,
+            receivables: receivables
+        )
     }
 
     private func isManualInvestment(asset: ManualAsset) -> Bool {

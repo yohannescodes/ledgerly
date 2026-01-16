@@ -80,6 +80,26 @@ final class TransactionsStore: ObservableObject {
         let month: PeriodTotal
     }
 
+    struct CashFlowSnapshot {
+        let start: Date
+        let end: Date
+        let incomeTotal: Decimal
+        let expenseTotal: Decimal
+        let previousIncomeTotal: Decimal
+        let previousExpenseTotal: Decimal
+
+        var netCashFlow: Decimal { incomeTotal - expenseTotal }
+        var previousNetCashFlow: Decimal { previousIncomeTotal - previousExpenseTotal }
+    }
+
+    struct TopExpenseCategory {
+        let label: String
+        let amount: Decimal
+        let share: Decimal
+        let transactionCount: Int
+        let colorHex: String?
+    }
+
     struct IncomeProgressEntry: Identifiable {
         let id = UUID()
         let monthStart: Date
@@ -276,6 +296,24 @@ final class TransactionsStore: ObservableObject {
         return ExpenseTotals(currentTotal: current, previousTotal: previous)
     }
 
+    func fetchExpenseTotals(days: Int, referenceDate: Date = Date()) -> ExpenseTotals {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        let calendar = Calendar.current
+        var totals = ExpenseTotals(currentTotal: .zero, previousTotal: .zero)
+        context.performAndWait {
+            let end = referenceDate
+            let start = calendar.date(byAdding: .day, value: -days, to: end) ?? end
+            let previousStart = calendar.date(byAdding: .day, value: -days, to: start) ?? start
+            let previousEnd = start
+            totals = ExpenseTotals(
+                currentTotal: totalExpenses(from: start, to: end, context: context, converter: converter),
+                previousTotal: totalExpenses(from: previousStart, to: previousEnd, context: context, converter: converter)
+            )
+        }
+        return totals
+    }
+
     func fetchSpendingCadence(referenceDate: Date = Date()) -> SpendingCadenceSnapshot {
         let context = persistence.container.viewContext
         let converter = CurrencyConverter.fromSettings(in: context)
@@ -342,6 +380,77 @@ final class TransactionsStore: ObservableObject {
         return SpendingCadenceSnapshot(today: todayTotal, week: weekTotal, month: monthTotal)
     }
 
+    func fetchCashFlowSnapshot(days: Int, referenceDate: Date = Date()) -> CashFlowSnapshot {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        let calendar = Calendar.current
+        var snapshot = CashFlowSnapshot(
+            start: referenceDate,
+            end: referenceDate,
+            incomeTotal: .zero,
+            expenseTotal: .zero,
+            previousIncomeTotal: .zero,
+            previousExpenseTotal: .zero
+        )
+        context.performAndWait {
+            let end = referenceDate
+            let start = calendar.date(byAdding: .day, value: -days, to: end) ?? end
+            let previousStart = calendar.date(byAdding: .day, value: -days, to: start) ?? start
+            let previousEnd = start
+            snapshot = CashFlowSnapshot(
+                start: start,
+                end: end,
+                incomeTotal: totalIncome(from: start, to: end, context: context, converter: converter),
+                expenseTotal: totalExpenses(from: start, to: end, context: context, converter: converter),
+                previousIncomeTotal: totalIncome(from: previousStart, to: previousEnd, context: context, converter: converter),
+                previousExpenseTotal: totalExpenses(from: previousStart, to: previousEnd, context: context, converter: converter)
+            )
+        }
+        return snapshot
+    }
+
+    func fetchTopExpenseCategory(start: Date, end: Date) -> TopExpenseCategory? {
+        let context = persistence.container.viewContext
+        let converter = CurrencyConverter.fromSettings(in: context)
+        var summary: TopExpenseCategory?
+        context.performAndWait {
+            let request = Transaction.fetchRequestAll()
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                NSPredicate(format: "direction == %@", "expense"),
+                NSPredicate(format: "date >= %@", start as NSDate),
+                NSPredicate(format: "date < %@", end as NSDate)
+            ])
+            do {
+                let results = try context.fetch(request)
+                let models = results.map(TransactionModel.init)
+                guard !models.isEmpty else { return }
+                let grouped = Dictionary(grouping: models) { model -> String in
+                    model.category?.name ?? "Uncategorized"
+                }
+                let totals = grouped.mapValues { group in
+                    group.reduce(.zero) { partial, model in
+                        partial + converter.convertToBase(model.amount, currency: model.currencyCode)
+                    }
+                }
+                guard let (label, amount) = totals.max(by: { $0.value < $1.value }) else { return }
+                let overall = totals.values.reduce(.zero, +)
+                let share = overall == .zero ? .zero : (amount / overall)
+                let colorHex = grouped[label]?.first?.category?.colorHex
+                let count = grouped[label]?.count ?? 0
+                summary = TopExpenseCategory(
+                    label: label,
+                    amount: amount,
+                    share: share,
+                    transactionCount: count,
+                    colorHex: colorHex
+                )
+            } catch {
+                assertionFailure("Failed to fetch top expense category: \(error)")
+            }
+        }
+        return summary
+    }
+
     private func totalExpenses(from start: Date, to end: Date, context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
         let request = Transaction.fetchRequestAll()
         request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -357,6 +466,25 @@ final class TransactionsStore: ObservableObject {
             }
         } catch {
             assertionFailure("Failed to fetch expense totals: \(error)")
+            return .zero
+        }
+    }
+
+    private func totalIncome(from start: Date, to end: Date, context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
+        let request = Transaction.fetchRequestAll()
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            NSPredicate(format: "direction == %@", "income"),
+            NSPredicate(format: "date >= %@", start as NSDate),
+            NSPredicate(format: "date < %@", end as NSDate)
+        ])
+        do {
+            let results = try context.fetch(request)
+            let models = results.map(TransactionModel.init)
+            return models.reduce(.zero) { partial, model in
+                partial + converter.convertToBase(model.amount, currency: model.currencyCode)
+            }
+        } catch {
+            assertionFailure("Failed to fetch income totals: \(error)")
             return .zero
         }
     }

@@ -2,6 +2,7 @@ import Foundation
 
 enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
     case netWorthHistory
+    case financialHealth
     case expenseBreakdown
     case spendingCadence
     case incomeProgress
@@ -13,6 +14,7 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .netWorthHistory: return "Net Worth Breakdown"
+        case .financialHealth: return "Financial Health"
         case .expenseBreakdown: return "Expense Breakdown"
         case .spendingCadence: return "Spending Cadence"
         case .incomeProgress: return "Income Progress"
@@ -25,6 +27,8 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .netWorthHistory:
             return "See how each asset class contributes to your total net worth."
+        case .financialHealth:
+            return "Cash flow, liquidity, FX exposure, and top spend in one glance."
         case .expenseBreakdown:
             return "Visualize where your spending goes across categories."
         case .spendingCadence:
@@ -41,6 +45,7 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
     var iconName: String {
         switch self {
         case .netWorthHistory: return "chart.line.uptrend.xyaxis"
+        case .financialHealth: return "heart.text.square"
         case .expenseBreakdown: return "chart.pie"
         case .spendingCadence: return "calendar"
         case .incomeProgress: return "chart.bar.xaxis"
@@ -50,7 +55,7 @@ enum DashboardWidget: String, CaseIterable, Identifiable, Codable {
     }
 
     static var defaultOrder: [DashboardWidget] {
-        [.netWorthHistory, .expenseBreakdown, .spendingCadence, .incomeProgress, .budgetSummary, .goalsSummary]
+        [.netWorthHistory, .financialHealth, .expenseBreakdown, .spendingCadence, .incomeProgress, .budgetSummary, .goalsSummary]
     }
 }
 

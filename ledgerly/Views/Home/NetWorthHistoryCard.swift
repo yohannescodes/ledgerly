@@ -4,6 +4,7 @@ import Charts
 struct NetWorthHistoryCard: View {
     let totals: NetWorthTotals?
     let baseCurrencyCode: String
+    let snapshots: [NetWorthSnapshotModel]
     @State private var chartAnimationProgress: CGFloat = 0
 
     var body: some View {
@@ -13,9 +14,21 @@ struct NetWorthHistoryCard: View {
                     .font(.headline)
                 Spacer()
                 if let totals {
-                    Text(CurrencyFormatter.string(for: totals.netWorth, code: baseCurrencyCode))
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(CurrencyFormatter.string(for: totals.netWorth, code: baseCurrencyCode))
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        if let change = netWorthChange {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                changeRow(change)
+                                Text("vs last snapshot")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -63,6 +76,76 @@ struct NetWorthHistoryCard: View {
         }
     }
 
+    private var netWorthChange: NetWorthChange? {
+        guard let totals, let previousSnapshot = snapshots.last else { return nil }
+        let current = totals.netWorth
+        let previous = previousSnapshot.netWorth
+        let delta = current - previous
+        let percent: Decimal?
+        if previous == .zero {
+            percent = nil
+        } else {
+            let denominator = previous < 0 ? -previous : previous
+            percent = delta / denominator
+        }
+        return NetWorthChange(delta: delta, percent: percent)
+    }
+
+    private func signedCurrency(_ value: Decimal, code: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = code
+        formatter.positivePrefix = "+"
+        return formatter.string(from: value as NSNumber) ?? "--"
+    }
+
+    private func changeRow(_ change: NetWorthChange) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                deltaText(change)
+                changeBadge(change)
+            }
+            VStack(alignment: .trailing, spacing: 4) {
+                deltaText(change)
+                changeBadge(change)
+            }
+        }
+    }
+
+    private func deltaText(_ change: NetWorthChange) -> some View {
+        Text(signedCurrency(change.delta, code: baseCurrencyCode))
+            .font(.caption.bold())
+            .foregroundStyle(change.delta >= 0 ? .green : .red)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private func changeBadge(_ change: NetWorthChange) -> some View {
+        let arrow = change.delta >= 0 ? "arrow.up" : "arrow.down"
+        let color: Color = change.delta >= 0 ? .green : .red
+        let pctText: String
+        if let percent = change.percent {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .percent
+            formatter.maximumFractionDigits = 1
+            pctText = formatter.string(from: percent as NSNumber) ?? "--"
+        } else {
+            pctText = change.delta == .zero ? "0%" : "--"
+        }
+        return HStack(spacing: 4) {
+            Image(systemName: arrow)
+            Text(pctText)
+                .lineLimit(1)
+        }
+        .font(.caption.bold())
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.15))
+        .clipShape(Capsule())
+        .foregroundStyle(color)
+    }
+
     private func segments(for totals: NetWorthTotals) -> [NetWorthSegment] {
         let liabilityAmount: Decimal
         if totals.totalLiabilities < 0 {
@@ -88,6 +171,11 @@ private struct NetWorthSegment: Identifiable {
     let color: Color
 
     var doubleValue: Double { NSDecimalNumber(decimal: amount).doubleValue }
+}
+
+private struct NetWorthChange {
+    let delta: Decimal
+    let percent: Decimal?
 }
 
 private extension NetWorthHistoryCard {
