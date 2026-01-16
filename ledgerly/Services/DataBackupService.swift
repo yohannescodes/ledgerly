@@ -3,7 +3,21 @@ import Foundation
 
 enum DataBackupError: Error {
     case buildFailure
-    case decodeFailure
+    case decodeFailure(Error)
+    case importFailure(Error)
+}
+
+extension DataBackupError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .buildFailure:
+            return "Unable to build backup."
+        case .decodeFailure(let error):
+            return "Backup file could not be read. \(error.localizedDescription)"
+        case .importFailure(let error):
+            return "Backup data could not be saved. \(error.localizedDescription)"
+        }
+    }
 }
 
 struct LedgerlyBackup: Codable {
@@ -48,6 +62,8 @@ struct LedgerlyBackup: Codable {
         let categoryIdentifier: String?
         let isTransfer: Bool
         let counterpartyWalletIdentifier: String?
+        let createdAt: Date?
+        let updatedAt: Date?
     }
 
     struct ManualAssetRecord: Codable {
@@ -164,12 +180,18 @@ final class DataBackupService {
     }
 
     func importBackup(from url: URL) throws {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         let data = try Data(contentsOf: url)
         let backup: LedgerlyBackup
         do {
             backup = try decoder.decode(LedgerlyBackup.self, from: data)
         } catch {
-            throw DataBackupError.decodeFailure
+            throw DataBackupError.decodeFailure(error)
         }
 
         let context = persistence.newBackgroundContext()
@@ -184,7 +206,7 @@ final class DataBackupService {
                 importError = error
             }
         }
-        if let importError { throw importError }
+        if let importError { throw DataBackupError.importFailure(importError) }
     }
 
     private func buildBackup(in context: NSManagedObjectContext) throws -> LedgerlyBackup {
@@ -251,7 +273,9 @@ final class DataBackupService {
                 walletIdentifier: $0.wallet?.identifier,
                 categoryIdentifier: $0.category?.identifier,
                 isTransfer: $0.isTransfer,
-                counterpartyWalletIdentifier: $0.counterpartyWallet?.identifier
+                counterpartyWalletIdentifier: $0.counterpartyWallet?.identifier,
+                createdAt: $0.createdAt,
+                updatedAt: $0.updatedAt
             )
         }
     }
@@ -392,6 +416,10 @@ final class DataBackupService {
 
     private func importTransactions(_ records: [LedgerlyBackup.TransactionRecord], in context: NSManagedObjectContext) throws {
         for record in records {
+            guard let walletID = record.walletIdentifier,
+                  let wallet = try fetchEntity(Wallet.self, identifier: walletID, in: context) else {
+                continue
+            }
             let transaction = try fetchEntity(Transaction.self, identifier: record.identifier, in: context) ?? Transaction(context: context)
             transaction.identifier = record.identifier
             transaction.direction = record.direction
@@ -401,9 +429,10 @@ final class DataBackupService {
             transaction.date = record.date
             transaction.notes = record.notes
             transaction.isTransfer = record.isTransfer
-            if let walletID = record.walletIdentifier {
-                transaction.wallet = try fetchEntity(Wallet.self, identifier: walletID, in: context)
-            }
+            let fallbackDate = record.date
+            transaction.createdAt = record.createdAt ?? transaction.createdAt ?? fallbackDate
+            transaction.updatedAt = record.updatedAt ?? fallbackDate
+            transaction.wallet = wallet
             if let categoryID = record.categoryIdentifier {
                 transaction.category = try fetchEntity(Category.self, identifier: categoryID, in: context)
             }
@@ -421,7 +450,7 @@ final class DataBackupService {
             asset.type = record.type
             asset.value = NSDecimalNumber(decimal: record.value)
             asset.currencyCode = record.currencyCode
-            asset.valuationDate = record.valuationDate
+            asset.valuationDate = record.valuationDate ?? Date()
             asset.includeInCore = record.includeInCore
             asset.includeInTangible = record.includeInTangible
             asset.volatility = record.volatility

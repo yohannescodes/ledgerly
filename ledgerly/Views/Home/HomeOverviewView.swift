@@ -341,6 +341,7 @@ struct IncomeProgressCard: View {
     @State private var hasEarlierData = false
     @State private var barAnimationProgress: CGFloat = 0
     @State private var displayedYear: Int = Calendar.current.component(.year, from: Date())
+    @State private var selectedMonthStart: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -349,10 +350,26 @@ struct IncomeProgressCard: View {
                     .font(.headline)
                 Spacer()
                 navigationButtons
-                if let latest = entries.last {
-                    Text(CurrencyFormatter.string(for: latest.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.secondary)
+                if let highlight = highlightedEntry {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(CurrencyFormatter.string(for: highlight.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.secondary)
+                        if let label = selectionLabel {
+                            HStack(spacing: 6) {
+                                Text(label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Button(action: { selectedMonthStart = nil }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption2)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Clear selection")
+                            }
+                        }
+                    }
                 }
             }
 
@@ -365,7 +382,42 @@ struct IncomeProgressCard: View {
                         x: .value("Month", entry.monthStart, unit: .month),
                         y: .value("Income", NSDecimalNumber(decimal: entry.amount).doubleValue * Double(barAnimationProgress))
                     )
-                    .foregroundStyle(Color.green.gradient)
+                    .foregroundStyle(isSelected(entry)
+                                     ? AnyShapeStyle(Color.green.gradient)
+                                     : AnyShapeStyle(Color.green.opacity(0.25)))
+                    .annotation(position: .top) {
+                        if isSelected(entry), selectedEntry != nil {
+                            Text(CurrencyFormatter.string(for: entry.amount, code: appSettingsStore.snapshot.baseCurrencyCode))
+                                .font(.caption2.bold())
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color(.systemBackground).opacity(0.95), in: Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 2)
+                        }
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        let plotFrame = geometry[proxy.plotAreaFrame]
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let xPosition = value.location.x - plotFrame.origin.x
+                                        guard xPosition >= 0, xPosition <= plotFrame.size.width else { return }
+                                        if let date: Date = proxy.value(atX: xPosition) {
+                                            selectedMonthStart = date
+                                        }
+                                    }
+                            )
+                    }
                 }
                 .chartXAxis {
                     AxisMarks(values: .stride(by: .month)) { value in
@@ -396,10 +448,43 @@ struct IncomeProgressCard: View {
         entries.reduce(.zero) { $0 + $1.amount }
     }
 
+    private var highlightedEntry: TransactionsStore.IncomeProgressEntry? {
+        if let selectedEntry {
+            return selectedEntry
+        }
+        guard !entries.isEmpty else { return nil }
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        if displayedYear == currentYear {
+            let currentMonth = calendar.component(.month, from: Date())
+            return entries.first { calendar.component(.month, from: $0.monthStart) == currentMonth } ?? entries.last
+        }
+        return entries.last
+    }
+
+    private var selectedEntry: TransactionsStore.IncomeProgressEntry? {
+        guard let selectedMonthStart, !entries.isEmpty else { return nil }
+        return entries.min(by: {
+            abs($0.monthStart.timeIntervalSince(selectedMonthStart)) <
+                abs($1.monthStart.timeIntervalSince(selectedMonthStart))
+        })
+    }
+
+    private var selectionLabel: String? {
+        guard let selectedEntry else { return nil }
+        return "Selected \(formatMonth(selectedEntry.monthStart))"
+    }
+
+    private func isSelected(_ entry: TransactionsStore.IncomeProgressEntry) -> Bool {
+        guard let selectedEntry else { return true }
+        return Calendar.current.isDate(entry.monthStart, equalTo: selectedEntry.monthStart, toGranularity: .month)
+    }
+
     private func reload() {
         let result = transactionsStore.fetchIncomeProgress(forYear: displayedYear)
         entries = result.entries
         hasEarlierData = result.hasEarlierData
+        selectedMonthStart = nil
         restartBarAnimation()
     }
 

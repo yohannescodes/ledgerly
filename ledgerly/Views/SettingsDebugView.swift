@@ -171,7 +171,7 @@ struct SettingsDebugView: View {
                 refreshStoresAfterImport()
                 alertMessage = "Backup imported successfully."
             } catch {
-                alertMessage = "Failed to import backup."
+                alertMessage = error.localizedDescription
             }
         case .failure(let error):
             if let cocoa = error as? CocoaError, cocoa.code == .userCancelled { return }
