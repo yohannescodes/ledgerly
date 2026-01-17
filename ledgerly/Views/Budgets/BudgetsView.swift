@@ -41,6 +41,7 @@ struct BudgetsView: View {
                         }
                     }
                 }
+                .onDelete(perform: deleteBudgets)
             }
         }
         .navigationTitle("Budgets")
@@ -72,5 +73,12 @@ struct BudgetsView: View {
         formatter.numberStyle = .currency
         formatter.currencyCode = code
         return formatter.string(from: value as NSNumber) ?? "--"
+    }
+
+    private func deleteBudgets(at offsets: IndexSet) {
+        let budgets = budgetsStore.budgets
+        offsets.map { budgets[$0] }.forEach { budget in
+            budgetsStore.deleteBudget(budgetID: budget.id)
+        }
     }
 }

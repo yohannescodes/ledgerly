@@ -41,11 +41,27 @@ struct BudgetFormView: View {
                 }
                 Section("Limit") {
                     DecimalTextField(title: "Amount", value: $input.limitAmount)
+                    NavigationLink {
+                        CurrencyPickerView(
+                            selectedCode: $input.currencyCode,
+                            infoText: "Budget limit currency"
+                        )
+                        .navigationTitle("Select Currency")
+                    } label: {
+                        HStack {
+                            Text("Currency")
+                            Spacer()
+                            Text(currencyDisplay)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Stepper("Month: \(input.month)", value: $input.month, in: 1...12)
-                    Stepper("Year: \(input.year)", value: $input.year, in: 2020...2100)
+                    Stepper(value: $input.year, in: 2020...2100) {
+                        Text("Year: ") + Text(input.year, format: .number.grouping(.never))
+                    }
                 }
             }
-            .navigationTitle("New Budget")
+            .navigationTitle(existingBudget == nil ? "New Budget" : "Edit Budget")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: dismiss.callAsFunction) }
                 ToolbarItem(placement: .confirmationAction) {
@@ -54,6 +70,12 @@ struct BudgetFormView: View {
                 }
             }
         }
+    }
+
+    private var currencyDisplay: String {
+        let code = input.currencyCode
+        let option = CurrencyDataSource.all.first { $0.code == code }
+        return option.map { "\($0.code) • \($0.name)" } ?? code
     }
 
     private func save() {
