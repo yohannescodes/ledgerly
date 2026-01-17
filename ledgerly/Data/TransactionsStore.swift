@@ -114,6 +114,8 @@ final class TransactionsStore: ObservableObject {
             let converter = CurrencyConverter.fromSettings(in: context)
             let baseAmount = converter.convertToBase(input.amount, currency: input.currencyCode)
             let category = input.categoryID.flatMap { try? context.existingObject(with: $0) as? Category }
+            let trimmedNotes = input.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            let notes = trimmedNotes.isEmpty ? nil : trimmedNotes
             let destinationWallet: Wallet?
             if input.direction == .transfer,
                let destinationID = input.destinationWalletID,
@@ -131,6 +133,7 @@ final class TransactionsStore: ObservableObject {
                 date: input.date,
                 wallet: wallet,
                 category: category,
+                notes: notes,
                 counterpartyWallet: destinationWallet
             )
             self.adjust(wallet: wallet, by: input.amount, currency: input.currencyCode, direction: input.direction, converter: converter)

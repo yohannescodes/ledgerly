@@ -383,9 +383,40 @@ final class DataBackupService {
     }
 
     private func importCategories(_ records: [LedgerlyBackup.CategoryRecord], in context: NSManagedObjectContext) throws {
+        let request: NSFetchRequest<Category> = Category.fetchRequest()
+        let existing = try context.fetch(request)
+        var categoriesByIdentifier: [String: Category] = [:]
+        var categoriesBySignature: [String: Category] = [:]
+
+        for category in existing {
+            if let identifier = category.identifier {
+                categoriesByIdentifier[identifier] = category
+            }
+            let signature = categorySignature(
+                name: category.name,
+                type: category.type,
+                colorHex: category.colorHex,
+                iconName: category.iconName
+            )
+            if categoriesBySignature[signature] == nil {
+                categoriesBySignature[signature] = category
+            }
+        }
+
         for record in records {
-            let category = try fetchEntity(Category.self, identifier: record.identifier, in: context) ?? Category(context: context)
-            category.identifier = record.identifier
+            let signature = categorySignature(
+                name: record.name,
+                type: record.type,
+                colorHex: record.colorHex,
+                iconName: record.iconName
+            )
+            let category = categoriesByIdentifier[record.identifier]
+                ?? categoriesBySignature[signature]
+                ?? Category(context: context)
+            if category.identifier != record.identifier {
+                category.identifier = record.identifier
+                categoriesByIdentifier[record.identifier] = category
+            }
             category.name = record.name
             category.type = record.type
             category.colorHex = record.colorHex
@@ -548,5 +579,13 @@ final class DataBackupService {
         request.fetchLimit = 1
         request.predicate = NSPredicate(format: "identifier == %@", identifier)
         return try context.fetch(request).first
+    }
+
+    private func categorySignature(name: String?, type: String?, colorHex: String?, iconName: String?) -> String {
+        let normalizedName = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedType = (type ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedColor = (colorHex ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedIcon = (iconName ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return "\(normalizedName)|\(normalizedType)|\(normalizedColor)|\(normalizedIcon)"
     }
 }

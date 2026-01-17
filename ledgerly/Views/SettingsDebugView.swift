@@ -70,6 +70,14 @@ struct SettingsDebugView: View {
                 }
             }
 
+            Section("Categories") {
+                NavigationLink {
+                    CategoryManagementView()
+                } label: {
+                    Label("Manage Transaction Categories", systemImage: "tag")
+                }
+            }
+
             Section("Exchange Rates") {
                 if rateEntries.isEmpty {
                     Text("Add conversion rates to normalize multi-currency wallets.")

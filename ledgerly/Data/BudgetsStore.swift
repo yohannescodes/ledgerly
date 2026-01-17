@@ -18,9 +18,10 @@ final class BudgetsStore: ObservableObject {
         let context = persistence.container.viewContext
         let request: NSFetchRequest<MonthlyBudget> = MonthlyBudget.fetchRequest()
         do {
+            let converter = CurrencyConverter.fromSettings(in: context)
             let budgets = try context.fetch(request)
             self.budgets = budgets.map { budget in
-                let spent = self.calculateSpent(for: budget, in: context)
+                let spent = self.calculateSpent(for: budget, in: context, converter: converter)
                 handleAlerts(for: budget, spent: spent)
                 let name = budget.category?.name ?? "Category"
                 return MonthlyBudgetModel(managedObject: budget, spent: spent, categoryName: name)
@@ -33,6 +34,11 @@ final class BudgetsStore: ObservableObject {
     }
     
     private func calculateSpent(for budget: MonthlyBudget, in context: NSManagedObjectContext) -> Decimal {
+        let converter = CurrencyConverter.fromSettings(in: context)
+        return calculateSpent(for: budget, in: context, converter: converter)
+    }
+
+    private func calculateSpent(for budget: MonthlyBudget, in context: NSManagedObjectContext, converter: CurrencyConverter) -> Decimal {
         guard let category = budget.category else { return .zero }
         let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
         let startComponents = DateComponents(year: Int(budget.year), month: Int(budget.month), day: 1)
@@ -45,9 +51,23 @@ final class BudgetsStore: ObservableObject {
         ])
         do {
             let transactions = try context.fetch(request)
-            return transactions.reduce(.zero) { $0 + ( $1.amount as Decimal? ?? .zero) }
+            let targetCurrency = budget.currencyCode ?? converter.baseCurrency
+            return transactions.reduce(.zero) { partial, transaction in
+                let amount = transaction.amount as Decimal? ?? .zero
+                return partial + converter.convert(amount, from: transaction.currencyCode, to: targetCurrency)
+            }
         } catch {
             return .zero
+        }
+    }
+
+    func deleteBudget(budgetID: NSManagedObjectID) {
+        let context = persistence.newBackgroundContext()
+        context.perform {
+            guard let budget = try? context.existingObject(with: budgetID) as? MonthlyBudget else { return }
+            context.delete(budget)
+            try? context.save()
+            Task { @MainActor in self.reload() }
         }
     }
     func createBudget(input: BudgetFormInput) {

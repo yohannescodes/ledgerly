@@ -79,6 +79,7 @@ extension Transaction {
         date: Date,
         wallet: Wallet,
         category: Category?,
+        notes: String? = nil,
         counterpartyWallet: Wallet? = nil
     ) -> Transaction {
         let transaction = Transaction(context: context)
@@ -88,6 +89,7 @@ extension Transaction {
         transaction.currencyCode = currencyCode
         transaction.convertedAmountBase = NSDecimalNumber(decimal: convertedAmountBase)
         transaction.date = date
+        transaction.notes = notes
         transaction.wallet = wallet
         transaction.category = category
         transaction.counterpartyWallet = counterpartyWallet
