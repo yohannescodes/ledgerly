@@ -9,6 +9,7 @@ struct SettingsDebugView: View {
     @EnvironmentObject private var goalsStore: GoalsStore
 
     private let backupService: DataBackupService
+    private let exportService: DataExportService
 
     @State private var exportedFile: ExportedFile?
     @State private var showingImporter = false
@@ -21,6 +22,7 @@ struct SettingsDebugView: View {
 
     init(persistence: PersistenceController = PersistenceController.shared) {
         self.backupService = DataBackupService(persistence: persistence)
+        self.exportService = DataExportService(persistence: persistence)
     }
 
     private var baseCurrencyBinding: Binding<String> {
@@ -115,6 +117,14 @@ struct SettingsDebugView: View {
                 }
             }
 
+            Section("Export CSV") {
+                ForEach(CSVExportKind.allCases) { kind in
+                    Button(action: { exportCSV(kind: kind) }) {
+                        Label("Export \(kind.title) CSV", systemImage: "doc.plaintext")
+                    }
+                }
+            }
+
             Section("Net Worth History") {
                 Button(role: .destructive) {
                     showingNetWorthRebuild = true
@@ -168,6 +178,15 @@ struct SettingsDebugView: View {
             exportedFile = ExportedFile(url: url)
         } catch {
             alertMessage = "Unable to build backup."
+        }
+    }
+
+    private func exportCSV(kind: CSVExportKind) {
+        do {
+            let url = try exportService.export(kind: kind)
+            exportedFile = ExportedFile(url: url)
+        } catch {
+            alertMessage = "Unable to export \(kind.title.lowercased()) CSV."
         }
     }
 

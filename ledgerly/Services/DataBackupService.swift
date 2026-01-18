@@ -76,10 +76,12 @@ struct LedgerlyBackup: Codable {
         let includeInCore: Bool
         let includeInTangible: Bool
         let volatility: Bool
+        let investmentProvider: String?
         let investmentCoinID: String?
         let investmentSymbol: String?
         let investmentQuantity: Decimal?
         let investmentCostPerUnit: Decimal?
+        let investmentContractMultiplier: Decimal?
         let marketPrice: Decimal?
         let marketPriceCurrencyCode: String?
         let marketPriceUpdatedAt: Date?
@@ -293,10 +295,12 @@ final class DataBackupService {
                 includeInCore: asset.includeInCore,
                 includeInTangible: asset.includeInTangible,
                 volatility: asset.volatility,
+                investmentProvider: asset.investmentProvider,
                 investmentCoinID: asset.investmentCoinID,
                 investmentSymbol: asset.investmentSymbol,
                 investmentQuantity: asset.investmentQuantity as Decimal?,
                 investmentCostPerUnit: asset.investmentCostPerUnit as Decimal?,
+                investmentContractMultiplier: asset.investmentContractMultiplier as Decimal?,
                 marketPrice: asset.marketPrice as Decimal?,
                 marketPriceCurrencyCode: asset.marketPriceCurrencyCode,
                 marketPriceUpdatedAt: asset.marketPriceUpdatedAt,
@@ -485,6 +489,13 @@ final class DataBackupService {
             asset.includeInCore = record.includeInCore
             asset.includeInTangible = record.includeInTangible
             asset.volatility = record.volatility
+            let inferredProvider: String?
+            if record.investmentProvider == nil, let identifier = record.investmentCoinID {
+                inferredProvider = identifier == identifier.uppercased() ? "stock" : "crypto"
+            } else {
+                inferredProvider = nil
+            }
+            asset.investmentProvider = record.investmentProvider ?? inferredProvider
             asset.investmentCoinID = record.investmentCoinID
             asset.investmentSymbol = record.investmentSymbol
             if let quantity = record.investmentQuantity {
@@ -492,6 +503,9 @@ final class DataBackupService {
             }
             if let cost = record.investmentCostPerUnit {
                 asset.investmentCostPerUnit = NSDecimalNumber(decimal: cost)
+            }
+            if let multiplier = record.investmentContractMultiplier {
+                asset.investmentContractMultiplier = NSDecimalNumber(decimal: multiplier)
             }
             if let marketPrice = record.marketPrice {
                 asset.marketPrice = NSDecimalNumber(decimal: marketPrice)
