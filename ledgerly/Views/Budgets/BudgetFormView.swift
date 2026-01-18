@@ -15,14 +15,12 @@ struct BudgetFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
     var existingBudget: MonthlyBudgetModel?
-    @State private var input = BudgetFormInput()
+    @State private var input: BudgetFormInput
 
     init(existingBudget: MonthlyBudgetModel? = nil, onSave: @escaping (BudgetFormInput) -> Void) {
         self.existingBudget = existingBudget
         self.onSave = onSave
-        if let budget = existingBudget {
-            _input = State(initialValue: BudgetFormInput(categoryID: budget.categoryID, limitAmount: budget.limitAmount, currencyCode: budget.currencyCode, month: budget.month, year: budget.year, existingBudgetID: budget.id))
-        }
+        _input = State(initialValue: BudgetFormView.makeInput(from: existingBudget))
     }
     @FetchRequest(sortDescriptors: [SortDescriptor(\.name, order: .forward)])
     private var categories: FetchedResults<Category>
@@ -70,6 +68,10 @@ struct BudgetFormView: View {
                 }
             }
         }
+        .onAppear(perform: syncInput)
+        .onChange(of: existingBudget?.identifier) { _ in
+            syncInput()
+        }
     }
 
     private var currencyDisplay: String {
@@ -81,5 +83,21 @@ struct BudgetFormView: View {
     private func save() {
         onSave(input)
         dismiss()
+    }
+
+    private func syncInput() {
+        input = BudgetFormView.makeInput(from: existingBudget)
+    }
+
+    private static func makeInput(from budget: MonthlyBudgetModel?) -> BudgetFormInput {
+        guard let budget = budget else { return BudgetFormInput() }
+        return BudgetFormInput(
+            categoryID: budget.categoryID,
+            limitAmount: budget.limitAmount,
+            currencyCode: budget.currencyCode,
+            month: budget.month,
+            year: budget.year,
+            existingBudgetID: budget.id
+        )
     }
 }

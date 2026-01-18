@@ -18,7 +18,7 @@ struct BudgetsView: View {
                             Text("Create monthly limits for your top categories and Ledgerly will track progress automatically.")
                         },
                         actions: {
-                            Button(action: { showingForm = true }) {
+                            Button(action: presentNewBudget) {
                                 Label("Add Budget", systemImage: "plus")
                             }
                         }
@@ -27,10 +27,11 @@ struct BudgetsView: View {
                 }
             } else {
                 ForEach(budgetsStore.budgets) { budget in
-                    NavigationLink(destination: BudgetDetailView(budget: budget) {
-                        showingForm = true
-                        editingBudget = budget
-                    }) {
+                    NavigationLink(destination: BudgetDetailView(budget: budget, onEdit: {
+                        presentEditBudget(budget)
+                    }, onDelete: {
+                        budgetsStore.deleteBudget(budgetID: budget.id)
+                    })) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(budget.categoryName)
                                 .font(.headline)
@@ -46,7 +47,7 @@ struct BudgetsView: View {
         }
         .navigationTitle("Budgets")
         .toolbar {
-            Button(action: { showingForm = true }) {
+            Button(action: presentNewBudget) {
                 Image(systemName: "plus")
             }
         }
@@ -80,5 +81,15 @@ struct BudgetsView: View {
         offsets.map { budgets[$0] }.forEach { budget in
             budgetsStore.deleteBudget(budgetID: budget.id)
         }
+    }
+
+    private func presentNewBudget() {
+        editingBudget = nil
+        showingForm = true
+    }
+
+    private func presentEditBudget(_ budget: MonthlyBudgetModel) {
+        editingBudget = budget
+        showingForm = true
     }
 }
