@@ -150,6 +150,7 @@ final class TransactionsStore: ObservableObject {
 
             Task { @MainActor in
                 NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+                NotificationCenter.default.post(name: .transactionsDidChange, object: nil)
             }
         }
     }
@@ -165,6 +166,7 @@ final class TransactionsStore: ObservableObject {
             try? context.save()
             Task { @MainActor in
                 NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+                NotificationCenter.default.post(name: .transactionsDidChange, object: nil)
             }
         }
     }
@@ -192,6 +194,7 @@ final class TransactionsStore: ObservableObject {
         if updatedModel != nil {
             Task { @MainActor in
                 NotificationCenter.default.post(name: .walletsDidChange, object: nil)
+                NotificationCenter.default.post(name: .transactionsDidChange, object: nil)
             }
         }
         return updatedModel

@@ -1,8 +1,10 @@
+import CoreData
 import SwiftUI
 
 struct SpendingCadenceCard: View {
     @EnvironmentObject private var transactionsStore: TransactionsStore
     @EnvironmentObject private var appSettingsStore: AppSettingsStore
+    @Environment(\.managedObjectContext) private var context
     @State private var snapshot: TransactionsStore.SpendingCadenceSnapshot?
 
     var body: some View {
@@ -30,6 +32,12 @@ struct SpendingCadenceCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .onAppear(perform: reload)
         .onChange(of: appSettingsStore.snapshot) { _ in reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
+            reload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange, object: context)) { _ in
+            reload()
+        }
     }
 
     private func reload() {
