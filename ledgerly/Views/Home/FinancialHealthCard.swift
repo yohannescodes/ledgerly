@@ -104,6 +104,9 @@ struct FinancialHealthCard: View {
         .onAppear(perform: reload)
         .onChange(of: range) { _ in reload() }
         .onChange(of: appSettingsStore.snapshot) { _ in reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
+            reload()
+        }
         .onChange(of: netWorthStore.liveTotals?.netWorth ?? .zero) { _ in
             investmentPerformance = netWorthStore.fetchManualInvestmentPerformance()
             fxExposure = netWorthStore.fetchFxExposure()

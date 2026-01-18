@@ -1,3 +1,4 @@
+import CoreData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -8,6 +9,7 @@ struct SettingsDebugView: View {
     @EnvironmentObject private var budgetsStore: BudgetsStore
     @EnvironmentObject private var goalsStore: GoalsStore
 
+    private let persistence: PersistenceController
     private let backupService: DataBackupService
     private let exportService: DataExportService
 
@@ -21,6 +23,7 @@ struct SettingsDebugView: View {
     @State private var showingNetWorthRebuild = false
 
     init(persistence: PersistenceController = PersistenceController.shared) {
+        self.persistence = persistence
         self.backupService = DataBackupService(persistence: persistence)
         self.exportService = DataExportService(persistence: persistence)
     }
@@ -196,6 +199,7 @@ struct SettingsDebugView: View {
             do {
                 try backupService.importBackup(from: url)
                 refreshStoresAfterImport()
+                NotificationCenter.default.post(name: .transactionsDidChange, object: nil)
                 alertMessage = "Backup imported successfully."
             } catch {
                 alertMessage = error.localizedDescription
@@ -207,6 +211,10 @@ struct SettingsDebugView: View {
     }
 
     private func refreshStoresAfterImport() {
+        let context = persistence.container.viewContext
+        context.performAndWait {
+            context.refreshAllObjects()
+        }
         walletsStore.reload()
         budgetsStore.reload()
         goalsStore.reload()

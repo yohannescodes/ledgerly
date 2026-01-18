@@ -235,6 +235,9 @@ struct ExpenseBreakdownCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .onAppear(perform: reload)
         .onChange(of: range) { _ in reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
+            reload()
+        }
     }
 
     private var changeBadge: some View {
@@ -442,6 +445,9 @@ struct IncomeProgressCard: View {
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .onAppear(perform: reload)
+        .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
+            reload()
+        }
     }
 
     private var totalAmount: Decimal {
