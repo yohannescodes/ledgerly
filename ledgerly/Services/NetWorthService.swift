@@ -94,12 +94,12 @@ final class NetWorthService {
         )
     }
 
-    func rebuildMonthlySnapshots() throws -> Int {
+    func rebuildDailySnapshots() throws -> Int {
         let context = persistence.newBackgroundContext()
         var outcome: Result<Int, Error> = .success(0)
         context.performAndWait {
             do {
-                outcome = .success(try rebuildMonthlySnapshots(in: context))
+                outcome = .success(try rebuildDailySnapshots(in: context))
             } catch {
                 outcome = .failure(error)
             }
@@ -107,33 +107,54 @@ final class NetWorthService {
         return try outcome.get()
     }
 
-    func ensureMonthlySnapshot() {
+    func ensureDailySnapshot() {
         let context = persistence.newBackgroundContext()
         context.perform {
             let calendar = Calendar.current
-            guard let snapshotStart = calendar.date(from: self.snapshotStartComponents),
-                  Date() >= snapshotStart else { return }
-            let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
-            request.sortDescriptors = [NSSortDescriptor(keyPath: \NetWorthSnapshot.timestamp, ascending: false)]
-            request.fetchLimit = 1
-            let lastSnapshot = try? context.fetch(request).first
-            let needsSnapshot: Bool
-            if let last = lastSnapshot?.timestamp {
-                needsSnapshot = Calendar.current.dateComponents([.month], from: last, to: Date()).month ?? 0 >= 1
+            guard let snapshotStart = calendar.date(from: self.snapshotStartComponents) else { return }
+            let now = Date()
+            guard let todayAtFive = calendar.date(
+                bySettingHour: 17,
+                minute: 0,
+                second: 0,
+                of: now
+            ) else { return }
+            let targetDate: Date
+            if now >= todayAtFive {
+                targetDate = todayAtFive
             } else {
-                needsSnapshot = true
+                guard let yesterdayAtFive = calendar.date(byAdding: .day, value: -1, to: todayAtFive) else { return }
+                targetDate = yesterdayAtFive
             }
-
-            guard needsSnapshot else { return }
-            let totals = self.computeTotals()
-            _ = NetWorthSnapshot.create(
+            guard targetDate >= snapshotStart else { return }
+            let dayStart = calendar.startOfDay(for: targetDate)
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
+            let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
+            request.predicate = NSPredicate(
+                format: "timestamp >= %@ AND timestamp < %@",
+                dayStart as NSDate,
+                nextDay as NSDate
+            )
+            request.fetchLimit = 1
+            let existing = try? context.fetch(request).first
+            guard existing == nil else { return }
+            let converter = CurrencyConverter.fromSettings(in: context)
+            let totals = self.computeTotals(
+                asOf: targetDate,
+                in: context,
+                converter: converter,
+                useCurrentBalances: true
+            )
+            let snapshot = NetWorthSnapshot.create(
                 in: context,
                 totalAssets: totals.totalAssets,
                 totalLiabilities: totals.totalLiabilities,
                 coreNetWorth: totals.coreNetWorth,
                 tangibleNetWorth: totals.tangibleNetWorth,
-                volatileAssets: totals.volatileAssets
+                volatileAssets: totals.volatileAssets,
+                currencyCode: converter.baseCurrency
             )
+            snapshot.timestamp = targetDate
             try? context.save()
         }
     }
@@ -284,6 +305,7 @@ final class NetWorthService {
         transactionRequest.predicate = NSPredicate(format: "date <= %@", date as NSDate)
         if let transactions = try? context.fetch(transactionRequest) {
             for transaction in transactions {
+                if transaction.affectsBalance == false { continue }
                 let amount = transaction.amount as Decimal? ?? .zero
                 let baseAmount = converter.convertToBase(amount, currency: transaction.currencyCode)
                 if let wallet = transaction.wallet, let currency = currencies[wallet.objectID] {
@@ -316,47 +338,65 @@ final class NetWorthService {
         }
     }
 
-    private func rebuildMonthlySnapshots(in context: NSManagedObjectContext) throws -> Int {
+    private func rebuildDailySnapshots(in context: NSManagedObjectContext) throws -> Int {
         let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
         let existing = try context.fetch(request)
         existing.forEach { context.delete($0) }
 
         let calendar = Calendar.current
-        guard let baseline = calendar.date(from: snapshotStartComponents) else { return 0 }
-        let earliest = earliestSnapshotDate(in: context) ?? baseline
-        let startDate = max(baseline, earliest)
         let now = Date()
-        guard let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: startDate)) else {
+        let startOfToday = calendar.startOfDay(for: now)
+        let baseline = calendar.date(from: snapshotStartComponents) ?? startOfToday
+        let startDate = max(startOfToday, baseline)
+        guard let todayAtFive = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now) else {
             try context.save()
             return 0
         }
-        guard startMonth <= now else {
+        let lastSnapshotDate: Date
+        if now >= todayAtFive {
+            lastSnapshotDate = todayAtFive
+        } else {
+            guard let yesterdayAtFive = calendar.date(byAdding: .day, value: -1, to: todayAtFive) else {
+                try context.save()
+                return 0
+            }
+            lastSnapshotDate = yesterdayAtFive
+        }
+        guard lastSnapshotDate >= startDate else {
             try context.save()
             return 0
         }
         let converter = CurrencyConverter.fromSettings(in: context)
-        var monthStart = startMonth
         var created = 0
-        while monthStart <= now {
-            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthStart) else { break }
-            let snapshotDate: Date
-            if calendar.isDate(monthStart, equalTo: now, toGranularity: .month) {
-                snapshotDate = now
-            } else {
-                snapshotDate = nextMonth.addingTimeInterval(-1)
+        var dayStart = calendar.startOfDay(for: startDate)
+        if let firstSnapshotDate = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: dayStart),
+           firstSnapshotDate < startDate {
+            if let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) {
+                dayStart = nextDay
             }
-            let totals = computeTotals(asOf: snapshotDate, in: context, converter: converter)
+        }
+        while true {
+            guard let snapshotDate = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: dayStart) else { break }
+            if snapshotDate > lastSnapshotDate { break }
+            let totals = computeTotals(
+                asOf: snapshotDate,
+                in: context,
+                converter: converter,
+                useCurrentBalances: true
+            )
             let snapshot = NetWorthSnapshot.create(
                 in: context,
                 totalAssets: totals.totalAssets,
                 totalLiabilities: totals.totalLiabilities,
                 coreNetWorth: totals.coreNetWorth,
                 tangibleNetWorth: totals.tangibleNetWorth,
-                volatileAssets: totals.volatileAssets
+                volatileAssets: totals.volatileAssets,
+                currencyCode: converter.baseCurrency
             )
             snapshot.timestamp = snapshotDate
             created += 1
-            monthStart = nextMonth
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { break }
+            dayStart = nextDay
         }
         try context.save()
         return created
@@ -392,7 +432,8 @@ final class NetWorthService {
     private func computeTotals(
         asOf date: Date,
         in context: NSManagedObjectContext,
-        converter: CurrencyConverter
+        converter: CurrencyConverter,
+        useCurrentBalances: Bool = false
     ) -> NetWorthTotals {
         var totalAssets: Decimal = .zero
         var totalLiabilities: Decimal = .zero
@@ -404,7 +445,11 @@ final class NetWorthService {
         var tangibleAssets: Decimal = .zero
         var volatileAssets: Decimal = .zero
 
-        walletAssets = sumWalletBalances(asOf: date, in: context, converter: converter)
+        if useCurrentBalances {
+            walletAssets = sumWalletBalances(in: context, converter: converter)
+        } else {
+            walletAssets = sumWalletBalances(asOf: date, in: context, converter: converter)
+        }
         manualAssetsTotal = sumManualAssets(
             in: context,
             asOf: date,

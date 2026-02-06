@@ -109,6 +109,7 @@
     </entity>
     <entity name="NetWorthSnapshot" representedClassName="NetWorthSnapshot" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="timestamp" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="totalAssets" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
         <attribute name="totalLiabilities" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
@@ -136,6 +137,7 @@
         <attribute name="notes" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="exchangeRateValue" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="exchangeRateTimestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="affectsBalance" optional="NO" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="isTransfer" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="attachmentURL" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>

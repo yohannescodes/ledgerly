@@ -103,6 +103,7 @@ struct NetWorthSnapshotModel: Identifiable, Hashable {
     let objectID: NSManagedObjectID?
     let identifier: String
     let timestamp: Date
+    let currencyCode: String?
     let totalAssets: Decimal
     let totalLiabilities: Decimal
     let coreNetWorth: Decimal
@@ -117,12 +118,14 @@ struct NetWorthSnapshotModel: Identifiable, Hashable {
         identifier: String = UUID().uuidString,
         timestamp: Date,
         totals: NetWorthTotals,
+        currencyCode: String? = nil,
         notes: String? = nil
     ) {
         self.id = UUID()
         self.objectID = objectID
         self.identifier = identifier
         self.timestamp = timestamp
+        self.currencyCode = currencyCode
         self.totalAssets = totals.totalAssets
         self.totalLiabilities = totals.totalLiabilities
         self.coreNetWorth = totals.coreNetWorth
@@ -279,6 +282,7 @@ extension NetWorthSnapshotModel {
             identifier: managedObject.identifier ?? UUID().uuidString,
             timestamp: managedObject.timestamp ?? Date(),
             totals: totals,
+            currencyCode: managedObject.currencyCode,
             notes: managedObject.notes
         )
     }
@@ -470,11 +474,13 @@ extension NetWorthSnapshot {
         coreNetWorth: Decimal,
         tangibleNetWorth: Decimal,
         volatileAssets: Decimal,
+        currencyCode: String?,
         notes: String? = nil
     ) -> NetWorthSnapshot {
         let snapshot = NetWorthSnapshot(context: context)
         snapshot.identifier = UUID().uuidString
         snapshot.timestamp = Date()
+        snapshot.currencyCode = currencyCode
         snapshot.totalAssets = NSDecimalNumber(decimal: totalAssets)
         snapshot.totalLiabilities = NSDecimalNumber(decimal: totalLiabilities)
         snapshot.coreNetWorth = NSDecimalNumber(decimal: coreNetWorth)

@@ -143,6 +143,7 @@ final class DataExportService {
             var rows: [[String]] = [[
                 "identifier",
                 "timestamp",
+                "currency_code",
                 "total_assets",
                 "total_liabilities",
                 "core_net_worth",
@@ -154,6 +155,7 @@ final class DataExportService {
                 rows.append([
                     snapshot.identifier ?? "",
                     dateString(snapshot.timestamp),
+                    snapshot.currencyCode ?? "",
                     decimalString(snapshot.totalAssets as Decimal?),
                     decimalString(snapshot.totalLiabilities as Decimal?),
                     decimalString(snapshot.coreNetWorth as Decimal?),

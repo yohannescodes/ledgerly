@@ -58,6 +58,7 @@ struct LedgerlyBackup: Codable {
         let convertedAmountBase: Decimal
         let date: Date
         let notes: String?
+        let affectsBalance: Bool?
         let walletIdentifier: String?
         let categoryIdentifier: String?
         let isTransfer: Bool
@@ -126,6 +127,7 @@ struct LedgerlyBackup: Codable {
     struct NetWorthSnapshotRecord: Codable {
         let identifier: String
         let timestamp: Date
+        let currencyCode: String?
         let totalAssets: Decimal
         let totalLiabilities: Decimal
         let coreNetWorth: Decimal
@@ -272,6 +274,7 @@ final class DataBackupService {
                 convertedAmountBase: ($0.convertedAmountBase as Decimal?) ?? .zero,
                 date: $0.date ?? Date(),
                 notes: $0.notes,
+                affectsBalance: $0.affectsBalance,
                 walletIdentifier: $0.wallet?.identifier,
                 categoryIdentifier: $0.category?.identifier,
                 isTransfer: $0.isTransfer,
@@ -365,6 +368,7 @@ final class DataBackupService {
             LedgerlyBackup.NetWorthSnapshotRecord(
                 identifier: $0.identifier ?? UUID().uuidString,
                 timestamp: $0.timestamp ?? Date(),
+                currencyCode: $0.currencyCode,
                 totalAssets: ($0.totalAssets as Decimal?) ?? .zero,
                 totalLiabilities: ($0.totalLiabilities as Decimal?) ?? .zero,
                 coreNetWorth: ($0.coreNetWorth as Decimal?) ?? .zero,
@@ -463,6 +467,7 @@ final class DataBackupService {
             transaction.convertedAmountBase = NSDecimalNumber(decimal: record.convertedAmountBase)
             transaction.date = record.date
             transaction.notes = record.notes
+            transaction.affectsBalance = record.affectsBalance ?? true
             transaction.isTransfer = record.isTransfer
             let fallbackDate = record.date
             transaction.createdAt = record.createdAt ?? transaction.createdAt ?? fallbackDate
@@ -579,6 +584,7 @@ final class DataBackupService {
             let snapshot = try fetchEntity(NetWorthSnapshot.self, identifier: record.identifier, in: context) ?? NetWorthSnapshot(context: context)
             snapshot.identifier = record.identifier
             snapshot.timestamp = record.timestamp
+            snapshot.currencyCode = record.currencyCode
             snapshot.totalAssets = NSDecimalNumber(decimal: record.totalAssets)
             snapshot.totalLiabilities = NSDecimalNumber(decimal: record.totalLiabilities)
             snapshot.coreNetWorth = NSDecimalNumber(decimal: record.coreNetWorth)

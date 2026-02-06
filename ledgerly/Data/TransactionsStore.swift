@@ -161,7 +161,9 @@ final class TransactionsStore: ObservableObject {
             guard let transaction = try? context.existingObject(with: id) as? Transaction else { return }
             let converter = CurrencyConverter.fromSettings(in: context)
             let state = TransactionBalanceState(transaction: transaction, converter: converter)
-            self.applyWalletAdjustments(for: state, converter: converter, multiplier: Decimal(-1))
+            if state.affectsBalance {
+                self.applyWalletAdjustments(for: state, converter: converter, multiplier: Decimal(-1))
+            }
             context.delete(transaction)
             try? context.save()
             Task { @MainActor in
@@ -179,7 +181,7 @@ final class TransactionsStore: ObservableObject {
             let converter = CurrencyConverter.fromSettings(in: context)
             let previousState = TransactionBalanceState(transaction: transaction, converter: converter)
             apply(change: change, to: transaction, converter: converter, context: context)
-            if changeAffectsWalletBalance(change) {
+            if transaction.affectsBalance, changeAffectsWalletBalance(change) {
                 applyBalanceAdjustments(previousState: previousState, transaction: transaction, converter: converter)
             }
             transaction.updatedAt = Date()
@@ -604,6 +606,7 @@ final class TransactionsStore: ObservableObject {
     }
 
     private func applyWalletAdjustments(for state: TransactionBalanceState, converter: CurrencyConverter, multiplier: Decimal) {
+        guard state.affectsBalance else { return }
         if let wallet = state.wallet {
             let delta = walletDelta(
                 amount: state.amount,
@@ -659,6 +662,7 @@ final class TransactionsStore: ObservableObject {
         let direction: TransactionFormInput.Direction
         let amount: Decimal
         let currencyCode: String
+        let affectsBalance: Bool
 
         var isTransfer: Bool { direction == .transfer }
 
@@ -673,6 +677,7 @@ final class TransactionsStore: ObservableObject {
             }
             amount = transaction.amount as Decimal? ?? .zero
             currencyCode = transaction.currencyCode ?? converter.baseCurrency
+            affectsBalance = transaction.affectsBalance
         }
     }
 }

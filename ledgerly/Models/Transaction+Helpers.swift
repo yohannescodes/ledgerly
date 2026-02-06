@@ -80,7 +80,8 @@ extension Transaction {
         wallet: Wallet,
         category: Category?,
         notes: String? = nil,
-        counterpartyWallet: Wallet? = nil
+        counterpartyWallet: Wallet? = nil,
+        affectsBalance: Bool = true
     ) -> Transaction {
         let transaction = Transaction(context: context)
         transaction.identifier = identifier
@@ -93,6 +94,7 @@ extension Transaction {
         transaction.wallet = wallet
         transaction.category = category
         transaction.counterpartyWallet = counterpartyWallet
+        transaction.affectsBalance = affectsBalance
         transaction.isTransfer = (direction == "transfer")
         transaction.createdAt = Date()
         transaction.updatedAt = Date()
