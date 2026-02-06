@@ -1,6 +1,6 @@
 # Vibe Coding Workflow
 
-I vibecoded ledgerly, and I never had to code a single line of code. You would be thinking I have all the patience there is in the universe to tolerate AI BS to pull this off in just a single weekend, but I am really sorry to tell you that you're all wrong.
+I vibecoded ledgerly, and I never had to write a single line of code. You would be thinking I have all the patience there is in the universe to tolerate AI BS to pull this off in just a single weekend, but I am really sorry to tell you that you're all wrong.
 
 Building this with Codex had been an awesome experience that led me to wish all of us were replaced by AI.
 
@@ -8,7 +8,7 @@ Here is how the workflow went:
 
 I told ChatGPT about my idea of building a net-worth-centered expense tracker app. It had been over 2 years since I started logging my income, expenses, and net worth on a spreadsheet like a caveman. This was the pain point that I needed to address before being addressed by the IRS. I admit that I am the target market for this product.
 
-After brainstorming it with ChatGPT, I prompted it to come up with a comprehensive PRD (Product Requirement Dashboard). This PRD serves as a lighthouse to the thing that I want to build, and it would be an easier source of inspiration for an AI agent to help it effectively do its job.
+After brainstorming it with ChatGPT, I prompted it to come up with a comprehensive PRD (Product Requirement Document). This PRD serves as a lighthouse to the thing that I want to build, and it would be an easier source of inspiration for an AI agent to help it effectively do its job.
 
 The PRD is ready. I went on to create a new project in Xcode (this was the closest I came to a traditional software engineering experience) and selected SwiftUI as the framework.
 
