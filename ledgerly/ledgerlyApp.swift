@@ -18,6 +18,8 @@ struct ledgerlyApp: App {
     @StateObject private var netWorthStore: NetWorthStore
     @StateObject private var budgetsStore: BudgetsStore
     @StateObject private var goalsStore: GoalsStore
+    @Environment(\.scenePhase) private var scenePhase
+    private let snapshotScheduler: NetWorthSnapshotScheduler
 
     init() {
         let persistence = PersistenceController.shared
@@ -29,7 +31,10 @@ struct ledgerlyApp: App {
         _netWorthStore = StateObject(wrappedValue: NetWorthStore(persistence: persistence))
         _budgetsStore = StateObject(wrappedValue: BudgetsStore(persistence: persistence))
         _goalsStore = StateObject(wrappedValue: GoalsStore(persistence: persistence))
+        snapshotScheduler = NetWorthSnapshotScheduler(persistence: persistence)
         requestNotificationAuthorization()
+        snapshotScheduler.register()
+        snapshotScheduler.scheduleNext()
     }
 
     var body: some Scene {
@@ -42,6 +47,11 @@ struct ledgerlyApp: App {
                 .environmentObject(netWorthStore)
                 .environmentObject(budgetsStore)
                 .environmentObject(goalsStore)
+                .onChange(of: scenePhase) { phase in
+                    if phase == .background {
+                        snapshotScheduler.scheduleNext()
+                    }
+                }
         }
     }
 }

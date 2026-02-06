@@ -25,7 +25,7 @@ final class NetWorthStore: ObservableObject {
     }
 
     func reload() {
-        service.ensureMonthlySnapshot()
+        service.ensureDailySnapshot()
         liveTotals = service.computeTotals()
         let context = persistence.container.viewContext
         let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
@@ -41,12 +41,22 @@ final class NetWorthStore: ObservableObject {
             let models = filteredResults.map(NetWorthSnapshotModel.init)
             snapshots = models
             latestSnapshot = models.last
-            displaySnapshots = Self.makeDisplaySnapshots(base: models, liveTotals: liveTotals)
+        let baseCurrency = CurrencyConverter.fromSettings(in: context).baseCurrency
+        displaySnapshots = Self.makeDisplaySnapshots(
+            base: models,
+            liveTotals: liveTotals,
+            baseCurrency: baseCurrency
+        )
         } catch {
             assertionFailure("Failed to load net worth snapshots: \(error)")
             snapshots = []
             latestSnapshot = nil
-            displaySnapshots = Self.makeDisplaySnapshots(base: [], liveTotals: liveTotals)
+            let baseCurrency = CurrencyConverter.fromSettings(in: context).baseCurrency
+            displaySnapshots = Self.makeDisplaySnapshots(
+                base: [],
+                liveTotals: liveTotals,
+                baseCurrency: baseCurrency
+            )
         }
     }
 
@@ -58,10 +68,10 @@ final class NetWorthStore: ObservableObject {
         service.computeManualInvestmentPerformance()
     }
 
-    func rebuildMonthlySnapshots(completion: @escaping (Result<Int, Error>) -> Void) {
+    func rebuildDailySnapshots(completion: @escaping (Result<Int, Error>) -> Void) {
         Task.detached { [service] in
             do {
-                let count = try service.rebuildMonthlySnapshots()
+                let count = try service.rebuildDailySnapshots()
                 await MainActor.run {
                     self.reload()
                     completion(.success(count))
@@ -90,10 +100,18 @@ final class NetWorthStore: ObservableObject {
         }
     }
 
-    private static func makeDisplaySnapshots(base: [NetWorthSnapshotModel], liveTotals: NetWorthTotals?) -> [NetWorthSnapshotModel] {
+    private static func makeDisplaySnapshots(
+        base: [NetWorthSnapshotModel],
+        liveTotals: NetWorthTotals?,
+        baseCurrency: String
+    ) -> [NetWorthSnapshotModel] {
         guard let totals = liveTotals else { return base }
         var combined = base
-        let liveSnapshot = NetWorthSnapshotModel(timestamp: Date(), totals: totals)
+        let liveSnapshot = NetWorthSnapshotModel(
+            timestamp: Date(),
+            totals: totals,
+            currencyCode: baseCurrency
+        )
         if let last = combined.last,
            Calendar.current.isDate(last.timestamp, equalTo: liveSnapshot.timestamp, toGranularity: .minute) {
             return combined

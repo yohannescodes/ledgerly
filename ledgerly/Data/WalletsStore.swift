@@ -57,6 +57,25 @@ final class WalletsStore: ObservableObject {
         let context = persistence.newBackgroundContext()
         context.perform {
             guard let wallet = try? context.existingObject(with: walletID) as? Wallet else { return }
+            let existingStarting = wallet.startingBalance as Decimal? ?? .zero
+            let existingCurrent = wallet.currentBalance as Decimal? ?? .zero
+            let existingCurrency = (wallet.baseCurrencyCode ?? input.currencyCode).uppercased()
+            let desiredCurrency = input.currencyCode.uppercased()
+            let shouldAdjustBalance = existingStarting != input.startingBalance
+                || existingCurrent != input.currentBalance
+                || existingCurrency != desiredCurrency
+            let converter = CurrencyConverter.fromSettings(in: context)
+            let now = Date()
+            let ledgerBalance = shouldAdjustBalance
+                ? Self.ledgerBalance(
+                    for: wallet,
+                    startingBalance: input.startingBalance,
+                    walletCurrency: desiredCurrency,
+                    asOf: now,
+                    converter: converter,
+                    in: context
+                )
+                : input.currentBalance
             wallet.name = input.name
             wallet.walletType = input.kind.storedValue
             wallet.baseCurrencyCode = input.currencyCode
@@ -65,6 +84,28 @@ final class WalletsStore: ObservableObject {
             wallet.currentBalance = NSDecimalNumber(decimal: input.currentBalance)
             wallet.includeInNetWorth = input.includeInNetWorth
             wallet.updatedAt = Date()
+            if shouldAdjustBalance {
+                let delta = input.currentBalance - ledgerBalance
+                let threshold = Decimal(string: "0.0001") ?? .zero
+                let deltaAbs = delta < .zero ? -delta : delta
+                if deltaAbs > threshold {
+                    let direction = delta >= 0 ? "income" : "expense"
+                    let amount = deltaAbs
+                    let convertedAmountBase = converter.convertToBase(amount, currency: desiredCurrency)
+                    _ = Transaction.create(
+                        in: context,
+                        direction: direction,
+                        amount: amount,
+                        currencyCode: desiredCurrency,
+                        convertedAmountBase: convertedAmountBase,
+                        date: now,
+                        wallet: wallet,
+                        category: nil,
+                        notes: "Balance adjustment",
+                        affectsBalance: false
+                    )
+                }
+            }
             do {
                 try context.save()
             } catch {
@@ -75,6 +116,47 @@ final class WalletsStore: ObservableObject {
                 NotificationCenter.default.post(name: .walletsDidChange, object: nil)
             }
         }
+    }
+
+    private static func ledgerBalance(
+        for wallet: Wallet,
+        startingBalance: Decimal,
+        walletCurrency: String,
+        asOf date: Date,
+        converter: CurrencyConverter,
+        in context: NSManagedObjectContext
+    ) -> Decimal {
+        var balance = startingBalance
+        let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+        let datePredicate = NSPredicate(format: "date <= %@", date as NSDate)
+        let walletPredicate = NSPredicate(format: "wallet == %@", wallet)
+        let counterpartyPredicate = NSPredicate(format: "counterpartyWallet == %@", wallet)
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            datePredicate,
+            NSCompoundPredicate(orPredicateWithSubpredicates: [walletPredicate, counterpartyPredicate])
+        ])
+        guard let transactions = try? context.fetch(request) else { return balance }
+        for transaction in transactions {
+            if transaction.affectsBalance == false { continue }
+            let amount = transaction.amount as Decimal? ?? .zero
+            let baseAmount = converter.convertToBase(amount, currency: transaction.currencyCode)
+            let walletAmount = converter.convertFromBase(baseAmount, to: walletCurrency)
+            let direction = (transaction.direction ?? "expense").lowercased()
+            if transaction.wallet == wallet {
+                switch direction {
+                case "income":
+                    balance += walletAmount
+                case "expense", "transfer":
+                    balance -= walletAmount
+                default:
+                    balance += walletAmount
+                }
+            }
+            if direction == "transfer", transaction.counterpartyWallet == wallet {
+                balance += walletAmount
+            }
+        }
+        return balance
     }
 
     func deleteWallet(walletID: NSManagedObjectID) {

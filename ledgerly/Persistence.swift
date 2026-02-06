@@ -72,6 +72,7 @@ final class PersistenceController {
             }
             CategoryDefaults.ensureDefaults(in: context)
             self.mergeDuplicateCategories(in: context)
+            self.markBalanceAdjustmentsNonAffecting(in: context)
             do {
                 try context.save()
             } catch {
@@ -87,14 +88,25 @@ final class PersistenceController {
         guard count == 0 else { return }
         let service = NetWorthService(persistence: self)
         let totals = service.computeTotals()
+        let converter = CurrencyConverter.fromSettings(in: context)
         _ = NetWorthSnapshot.create(
             in: context,
             totalAssets: totals.totalAssets,
             totalLiabilities: totals.totalLiabilities,
             coreNetWorth: totals.coreNetWorth,
             tangibleNetWorth: totals.tangibleNetWorth,
-            volatileAssets: totals.volatileAssets
+            volatileAssets: totals.volatileAssets,
+            currencyCode: converter.baseCurrency
         )
+    }
+
+    private func markBalanceAdjustmentsNonAffecting(in context: NSManagedObjectContext) {
+        let request: NSFetchRequest<Transaction> = Transaction.fetchRequest()
+        request.predicate = NSPredicate(format: "notes == %@ AND affectsBalance == YES", "Balance adjustment")
+        guard let transactions = try? context.fetch(request), !transactions.isEmpty else { return }
+        for transaction in transactions {
+            transaction.affectsBalance = false
+        }
     }
 
     private func mergeDuplicateCategories(in context: NSManagedObjectContext) {

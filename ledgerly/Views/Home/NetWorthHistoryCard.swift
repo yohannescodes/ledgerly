@@ -5,6 +5,7 @@ struct NetWorthHistoryCard: View {
     let totals: NetWorthTotals?
     let baseCurrencyCode: String
     let snapshots: [NetWorthSnapshotModel]
+    let converter: CurrencyConverter
     @State private var chartAnimationProgress: CGFloat = 0
 
     var body: some View {
@@ -77,9 +78,9 @@ struct NetWorthHistoryCard: View {
     }
 
     private var netWorthChange: NetWorthChange? {
-        guard let totals, let previousSnapshot = snapshots.last else { return nil }
+        guard let totals, let previousSnapshot = comparisonSnapshot else { return nil }
         let current = totals.netWorth
-        let previous = previousSnapshot.netWorth
+        guard let previous = convertedNetWorth(for: previousSnapshot) else { return nil }
         let delta = current - previous
         let percent: Decimal?
         if previous == .zero {
@@ -89,6 +90,37 @@ struct NetWorthHistoryCard: View {
             percent = delta / denominator
         }
         return NetWorthChange(delta: delta, percent: percent)
+    }
+
+    private func convertedNetWorth(for snapshot: NetWorthSnapshotModel) -> Decimal? {
+        guard let code = snapshot.currencyCode, !code.isEmpty else {
+            return snapshot.netWorth
+        }
+        let base = baseCurrencyCode.uppercased()
+        let snapshotCode = code.uppercased()
+        guard snapshotCode != base else { return snapshot.netWorth }
+        guard converter.rates[snapshotCode] != nil else { return nil }
+        return converter.convert(snapshot.netWorth, from: snapshotCode, to: base)
+    }
+
+    private var comparisonSnapshot: NetWorthSnapshotModel? {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let todayAtFive = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now) else {
+            return nil
+        }
+        let targetDate: Date
+        if now >= todayAtFive {
+            targetDate = todayAtFive
+        } else {
+            guard let yesterdayAtFive = calendar.date(byAdding: .day, value: -1, to: todayAtFive) else {
+                return nil
+            }
+            targetDate = yesterdayAtFive
+        }
+        let dayStart = calendar.startOfDay(for: targetDate)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+        return snapshots.last(where: { $0.timestamp >= dayStart && $0.timestamp < nextDay })
     }
 
     private func signedCurrency(_ value: Decimal, code: String) -> String {

@@ -134,7 +134,7 @@ struct SettingsDebugView: View {
                 } label: {
                     Label("Rebuild Net Worth Snapshots", systemImage: "arrow.clockwise")
                 }
-                Text("Deletes existing snapshots and rebuilds monthly totals from January 2026 onward using transactions and manual assets. Uses current FX rates and valuations, so past months are approximate.")
+                Text("Deletes existing snapshots and rebuilds daily totals (5 PM local time) starting from today using transactions and manual assets. Uses current FX rates and valuations, so past days are approximate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -166,7 +166,7 @@ struct SettingsDebugView: View {
             Button("Rebuild", role: .destructive, action: rebuildNetWorthHistory)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will delete your existing net worth snapshots and recreate monthly totals from your data. This cannot be undone.")
+            Text("This will delete your existing net worth snapshots and recreate daily totals from today. This cannot be undone.")
         }
         .alert("Data Management", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
             Button("OK", role: .cancel) { alertMessage = nil }
@@ -236,10 +236,10 @@ struct SettingsDebugView: View {
     }
 
     private func rebuildNetWorthHistory() {
-        netWorthStore.rebuildMonthlySnapshots { result in
+        netWorthStore.rebuildDailySnapshots { result in
             switch result {
             case .success(let count):
-                alertMessage = "Rebuilt \(count) monthly snapshots."
+                alertMessage = "Rebuilt \(count) daily snapshots."
             case .failure:
                 alertMessage = "Failed to rebuild net worth snapshots."
             }

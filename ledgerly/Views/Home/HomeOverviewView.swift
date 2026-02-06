@@ -100,7 +100,11 @@ struct HomeOverviewView: View {
             NetWorthHistoryCard(
                 totals: netWorthStore.liveTotals,
                 baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
-                snapshots: netWorthStore.snapshots
+                snapshots: netWorthStore.snapshots,
+                converter: CurrencyConverter(
+                    baseCurrency: appSettingsStore.snapshot.baseCurrencyCode,
+                    rates: appSettingsStore.snapshot.exchangeRates
+                )
             )
         case .financialHealth:
             FinancialHealthCard()
