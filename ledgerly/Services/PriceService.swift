@@ -133,8 +133,7 @@ final class ManualInvestmentPriceService {
 
     private let persistence: PersistenceController
     private let session: URLSession
-    private let coinApiKey: String?
-    private let alphaClient: AlphaVantageClient?
+    private let environment: [String: String]
 
     private enum Provider: String {
         case crypto
@@ -144,34 +143,29 @@ final class ManualInvestmentPriceService {
     private init(
         persistence: PersistenceController = .shared,
         session: URLSession = .shared,
-        coinApiKey: String? = ProcessInfo.processInfo.environment["COINGECKO_API_KEY"],
-        alphaApiKey: String? = ProcessInfo.processInfo.environment["ALPHAVANTAGE_API_KEY"]
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.persistence = persistence
         self.session = session
-        self.coinApiKey = coinApiKey
-        if let alphaApiKey, !alphaApiKey.isEmpty {
-            self.alphaClient = AlphaVantageClient(apiKey: alphaApiKey, session: session)
-        } else {
-            self.alphaClient = nil
-        }
+        self.environment = environment
     }
 
     func refresh(baseCurrency: String, assetIDs: [NSManagedObjectID]? = nil) async {
         let descriptors = fetchInvestmentDescriptors(filteredBy: assetIDs)
         guard !descriptors.isEmpty else { return }
+        let apiConfiguration = resolveAPIConfiguration()
         let cryptoIDs = Array(Set(descriptors.filter { $0.provider == .crypto }.map { $0.identifier.lowercased() }))
         let stockIDs = Array(Set(descriptors.filter { $0.provider == .stock }.map { $0.identifier.uppercased() }))
         if stockIDs.isEmpty {
             print("[ManualInvestmentPriceService] No stock holdings to refresh.")
-        } else if alphaClient == nil {
-            print("[ManualInvestmentPriceService] Missing ALPHAVANTAGE_API_KEY, stock refresh skipped for: \(stockIDs)")
+        } else if apiConfiguration.alphaClient == nil {
+            print("[ManualInvestmentPriceService] Missing Alpha Vantage API key, stock refresh skipped for: \(stockIDs)")
         } else {
             print("[ManualInvestmentPriceService] Refreshing stocks via Alpha Vantage: \(stockIDs)")
         }
         print("[ManualInvestmentPriceService] Refreshing crypto via CoinGecko: \(cryptoIDs)")
-        async let cryptoTask = fetchCryptoPrices(for: cryptoIDs)
-        async let stockTask = fetchStockQuotes(for: stockIDs)
+        async let cryptoTask = fetchCryptoPrices(for: cryptoIDs, apiKey: apiConfiguration.coinApiKey)
+        async let stockTask = fetchStockQuotes(for: stockIDs, alphaClient: apiConfiguration.alphaClient)
         let cryptoQuotes = (try? await cryptoTask) ?? [:]
         let stockQuotes = await stockTask
         let context = persistence.newBackgroundContext()
@@ -242,7 +236,28 @@ final class ManualInvestmentPriceService {
         return results
     }
 
-    private func fetchCryptoPrices(for coinIDs: [String]) async throws -> [String: Double] {
+    private func resolveAPIConfiguration() -> APIConfiguration {
+        let context = persistence.container.viewContext
+        var storedStockKey: String?
+        var storedCryptoKey: String?
+        context.performAndWait {
+            let settings = AppSettings.fetchSingleton(in: context)
+            storedStockKey = normalizedApiKey(settings?.stockApiKey)
+            storedCryptoKey = normalizedApiKey(settings?.cryptoApiKey)
+        }
+
+        let stockApiKey = storedStockKey ?? normalizedApiKey(environment["ALPHAVANTAGE_API_KEY"])
+        let cryptoApiKey = storedCryptoKey ?? normalizedApiKey(environment["COINGECKO_API_KEY"])
+        let alphaClient = stockApiKey.map { AlphaVantageClient(apiKey: $0, session: session) }
+        return APIConfiguration(coinApiKey: cryptoApiKey, alphaClient: alphaClient)
+    }
+
+    private func normalizedApiKey(_ raw: String?) -> String? {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func fetchCryptoPrices(for coinIDs: [String], apiKey: String?) async throws -> [String: Double] {
         guard !coinIDs.isEmpty else { return [:] }
         var components = URLComponents(string: "https://api.coingecko.com/api/v3/simple/price")!
         components.queryItems = [
@@ -250,8 +265,9 @@ final class ManualInvestmentPriceService {
             URLQueryItem(name: "vs_currencies", value: "usd")
         ]
         var request = URLRequest(url: components.url!)
-        if let coinApiKey {
-            request.addValue(coinApiKey, forHTTPHeaderField: "x-cg-demo-api-key")
+        if let apiKey {
+            // CoinGecko accepts this header for demo/pro plans and ignores it when unavailable.
+            request.addValue(apiKey, forHTTPHeaderField: "x-cg-demo-api-key")
         }
         print("[ManualInvestmentPriceService] CoinGecko request: \(request.url?.absoluteString ?? "")")
         let (data, response) = try await session.data(for: request)
@@ -267,7 +283,7 @@ final class ManualInvestmentPriceService {
         }
     }
 
-    private func fetchStockQuotes(for tickers: [String]) async -> [String: PriceService.MarketQuote] {
+    private func fetchStockQuotes(for tickers: [String], alphaClient: AlphaVantageClient?) async -> [String: PriceService.MarketQuote] {
         guard let alphaClient, !tickers.isEmpty else { return [:] }
         do {
             let quotes = try await alphaClient.fetchQuotes(for: tickers)
@@ -290,5 +306,10 @@ final class ManualInvestmentPriceService {
     private struct ProviderQuote {
         let price: Decimal
         let currencyCode: String
+    }
+
+    private struct APIConfiguration {
+        let coinApiKey: String?
+        let alphaClient: AlphaVantageClient?
     }
 }

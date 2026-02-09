@@ -17,7 +17,7 @@ struct AlphaVantageClient: MarketDataClient {
         var quotes: [PriceService.MarketQuote] = []
         for symbol in symbols { // simple sequential fetch to respect rate limits
             guard let url = URL(string: "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=\(symbol)&apikey=\(apiKey)") else { continue }
-            print("[AlphaVantageClient] Request: \(url.absoluteString)")
+            print("[AlphaVantageClient] Requesting quote for \(symbol.uppercased())")
             let (data, urlResponse) = try await session.data(from: url)
             if let http = urlResponse as? HTTPURLResponse {
                 print("[AlphaVantageClient] Status: \(http.statusCode)")
