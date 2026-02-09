@@ -11,6 +11,8 @@
         <attribute name="priceRefreshIntervalMinutes" optional="NO" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
         <attribute name="customExchangeRates" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="dashboardWidgets" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="stockApiKey" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="cryptoApiKey" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <uniquenessConstraints>
             <uniquenessConstraint>
                 <constraint value="identifier"/>

@@ -12,6 +12,8 @@ struct AppSettingsSnapshot: Equatable {
     let notificationsEnabled: Bool
     let dashboardWidgets: [DashboardWidget]
     let exchangeRates: [String: Decimal]
+    let stockApiKey: String?
+    let cryptoApiKey: String?
 }
 
 enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
@@ -133,6 +135,20 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    func updateMarketDataAPIKeys(stock stockApiKey: String, crypto cryptoApiKey: String) {
+        performMutation { settings in
+            settings.stockApiKey = Self.normalizedAPIKey(stockApiKey)
+            settings.cryptoApiKey = Self.normalizedAPIKey(cryptoApiKey)
+        }
+    }
+
+    func clearMarketDataAPIKeys() {
+        performMutation { settings in
+            settings.stockApiKey = nil
+            settings.cryptoApiKey = nil
+        }
+    }
+
     private func performMutation(_ block: @escaping (AppSettings) -> Void) {
         let context = persistence.newBackgroundContext()
         context.perform {
@@ -151,6 +167,11 @@ final class AppSettingsStore: ObservableObject {
             }
         }
     }
+
+    fileprivate static func normalizedAPIKey(_ key: String?) -> String? {
+        let trimmed = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 private extension AppSettingsSnapshot {
@@ -163,6 +184,8 @@ private extension AppSettingsSnapshot {
         notificationsEnabled = managedObject.notificationsEnabled
         dashboardWidgets = DashboardWidgetStorage.decode(managedObject.dashboardWidgets)
         exchangeRates = ExchangeRateStorage.decode(managedObject.customExchangeRates)
+        stockApiKey = AppSettingsStore.normalizedAPIKey(managedObject.stockApiKey)
+        cryptoApiKey = AppSettingsStore.normalizedAPIKey(managedObject.cryptoApiKey)
     }
 }
 

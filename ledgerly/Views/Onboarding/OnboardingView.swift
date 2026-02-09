@@ -271,7 +271,9 @@ private struct SummaryRow: View {
             priceRefreshIntervalMinutes: 30,
             notificationsEnabled: true,
             dashboardWidgets: DashboardWidget.defaultOrder,
-            exchangeRates: [:]
+            exchangeRates: [:],
+            stockApiKey: nil,
+            cryptoApiKey: nil
         )
     )
     .environmentObject(AppSettingsStore(persistence: PersistenceController.preview))

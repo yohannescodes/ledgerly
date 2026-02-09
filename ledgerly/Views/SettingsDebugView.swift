@@ -21,6 +21,8 @@ struct SettingsDebugView: View {
     @State private var pendingRateValue: Decimal = 1
     @State private var isEditingRate = false
     @State private var showingNetWorthRebuild = false
+    @State private var stockApiKeyInput = ""
+    @State private var cryptoApiKeyInput = ""
 
     init(persistence: PersistenceController = PersistenceController.shared) {
         self.persistence = persistence
@@ -111,6 +113,30 @@ struct SettingsDebugView: View {
                 }
             }
 
+            Section(
+                header: Text("Market Data API Keys"),
+                footer: Text("Optional: add your own keys for real-time stock and crypto valuation. Stock quotes use Alpha Vantage and crypto quotes use CoinGecko.")
+            ) {
+                SecureField("Alpha Vantage API Key (Stocks)", text: $stockApiKeyInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .privacySensitive()
+
+                SecureField("CoinGecko API Key (Crypto)", text: $cryptoApiKeyInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .privacySensitive()
+
+                Button("Save API Keys", action: saveMarketDataAPIKeys)
+                    .disabled(!hasUnsavedMarketDataKeyChanges)
+
+                if hasStoredMarketDataKey {
+                    Button(role: .destructive, action: clearMarketDataAPIKeys) {
+                        Text("Remove Saved API Keys")
+                    }
+                }
+            }
+
             Section("Backup & Restore") {
                 Button(action: exportBackup) {
                     Label("Export Full Backup", systemImage: "externaldrive")
@@ -173,6 +199,7 @@ struct SettingsDebugView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .onAppear(perform: syncMarketDataAPIKeyInputs)
     }
 
     private func exportBackup() {
@@ -228,6 +255,15 @@ struct SettingsDebugView: View {
             .map { ($0.key, $0.value) }
     }
 
+    private var hasStoredMarketDataKey: Bool {
+        appSettingsStore.snapshot.stockApiKey != nil || appSettingsStore.snapshot.cryptoApiKey != nil
+    }
+
+    private var hasUnsavedMarketDataKeyChanges: Bool {
+        normalizedApiKey(stockApiKeyInput) != appSettingsStore.snapshot.stockApiKey
+            || normalizedApiKey(cryptoApiKeyInput) != appSettingsStore.snapshot.cryptoApiKey
+    }
+
     private func presentRateEditor(code: String?, value: Decimal?) {
         pendingRateCode = code
         pendingRateValue = value ?? 1
@@ -246,11 +282,35 @@ struct SettingsDebugView: View {
         }
     }
 
+    private func saveMarketDataAPIKeys() {
+        stockApiKeyInput = normalizedApiKey(stockApiKeyInput) ?? ""
+        cryptoApiKeyInput = normalizedApiKey(cryptoApiKeyInput) ?? ""
+        appSettingsStore.updateMarketDataAPIKeys(stock: stockApiKeyInput, crypto: cryptoApiKeyInput)
+        alertMessage = "Market data API keys updated."
+    }
+
+    private func clearMarketDataAPIKeys() {
+        stockApiKeyInput = ""
+        cryptoApiKeyInput = ""
+        appSettingsStore.clearMarketDataAPIKeys()
+        alertMessage = "Market data API keys removed."
+    }
+
+    private func syncMarketDataAPIKeyInputs() {
+        stockApiKeyInput = appSettingsStore.snapshot.stockApiKey ?? ""
+        cryptoApiKeyInput = appSettingsStore.snapshot.cryptoApiKey ?? ""
+    }
+
     private func formattedRate(_ value: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.maximumFractionDigits = 6
         formatter.minimumFractionDigits = 0
         return formatter.string(from: NSDecimalNumber(decimal: value)) ?? "0"
+    }
+
+    private func normalizedApiKey(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
