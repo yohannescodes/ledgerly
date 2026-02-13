@@ -12,13 +12,13 @@ struct AppSettingsSnapshot: Equatable {
     let notificationsEnabled: Bool
     let dashboardWidgets: [DashboardWidget]
     let exchangeRates: [String: Decimal]
+    let exchangeRateAPIKey: String?
     let stockApiKey: String?
     let cryptoApiKey: String?
 }
 
 enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
     case official
-    case parallel
     case manual
 
     var id: String { rawValue }
@@ -26,7 +26,6 @@ enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .official: return "Official"
-        case .parallel: return "Parallel"
         case .manual: return "Manual"
         }
     }
@@ -34,11 +33,39 @@ enum ExchangeMode: String, CaseIterable, Identifiable, Hashable {
     var description: String {
         switch self {
         case .official:
-            return "Uses trusted FX feeds suited for banks and salary accounts."
-        case .parallel:
-            return "Tracks unofficial/parallel rates for volatile markets."
+            return "Fetches rates from ExchangeRate-API using your private API key."
         case .manual:
             return "You supply every rate manually for total control."
+        }
+    }
+
+    init(storedValue: String?) {
+        switch storedValue?.lowercased() {
+        case ExchangeMode.manual.rawValue:
+            self = .manual
+        default:
+            // Legacy or unknown values (including "parallel") fall back to official.
+            self = .official
+        }
+    }
+}
+
+struct OfficialExchangeRateSyncResult {
+    let baseCurrencyCode: String
+    let updatedAt: Date
+    let ratesCount: Int
+}
+
+enum OfficialExchangeRateSyncError: LocalizedError {
+    case modeNotOfficial
+    case missingAPIKey
+
+    var errorDescription: String? {
+        switch self {
+        case .modeNotOfficial:
+            return "Switch to Official mode to sync from ExchangeRate-API."
+        case .missingAPIKey:
+            return "Add your ExchangeRate-API key before syncing rates."
         }
     }
 }
@@ -84,14 +111,21 @@ final class AppSettingsStore: ObservableObject {
         let normalized = code.uppercased()
         performMutation { settings in
             let previousBase = (settings.baseCurrencyCode ?? normalized).uppercased()
-            let existingTable = ExchangeRateStorage.decode(settings.customExchangeRates)
-            let rebased = ExchangeRateTransformer.rebase(
-                existingTable,
+            let officialTable = ExchangeRateStorage.decode(settings.customExchangeRates)
+            let manualTable = ExchangeRateStorage.decode(settings.manualExchangeRates)
+            let rebasedOfficial = ExchangeRateTransformer.rebase(
+                officialTable,
+                from: previousBase,
+                to: normalized
+            )
+            let rebasedManual = ExchangeRateTransformer.rebase(
+                manualTable,
                 from: previousBase,
                 to: normalized
             )
             settings.baseCurrencyCode = normalized
-            settings.customExchangeRates = ExchangeRateStorage.encode(rebased)
+            settings.customExchangeRates = ExchangeRateStorage.encode(rebasedOfficial)
+            settings.manualExchangeRates = ExchangeRateStorage.encode(rebasedManual)
         }
     }
 
@@ -121,18 +155,75 @@ final class AppSettingsStore: ObservableObject {
 
     func updateExchangeRate(code: String, value: Decimal) {
         performMutation { settings in
-            var table = ExchangeRateStorage.decode(settings.customExchangeRates)
+            let mode = ExchangeMode(storedValue: settings.exchangeMode)
+            var table = Self.decodeRateTable(for: mode, settings: settings)
             table[code.uppercased()] = value
-            settings.customExchangeRates = ExchangeRateStorage.encode(table)
+            Self.encodeRateTable(table, for: mode, settings: settings)
         }
     }
 
     func removeExchangeRate(code: String) {
         performMutation { settings in
-            var table = ExchangeRateStorage.decode(settings.customExchangeRates)
+            let mode = ExchangeMode(storedValue: settings.exchangeMode)
+            var table = Self.decodeRateTable(for: mode, settings: settings)
             table.removeValue(forKey: code.uppercased())
-            settings.customExchangeRates = ExchangeRateStorage.encode(table)
+            Self.encodeRateTable(table, for: mode, settings: settings)
         }
+    }
+
+    func updateExchangeRateAPIKey(_ apiKey: String?) {
+        performMutation { settings in
+            settings.exchangeRateApiKey = Self.normalizedAPIKey(apiKey)
+        }
+    }
+
+    func clearExchangeRateAPIKey() {
+        updateExchangeRateAPIKey(nil)
+    }
+
+    func syncOfficialExchangeRates(
+        apiKeyOverride: String? = nil,
+        baseCurrencyOverride: String? = nil,
+        ignoreMode: Bool = false
+    ) async throws -> OfficialExchangeRateSyncResult {
+        let resolvedAPIKey = Self.normalizedAPIKey(apiKeyOverride)
+        let resolvedBaseCurrencyCode = normalizedCurrencyCode(baseCurrencyOverride)
+        let resolved = try await resolveOfficialRateConfiguration(
+            apiKeyOverride: resolvedAPIKey,
+            baseCurrencyOverride: resolvedBaseCurrencyCode,
+            ignoreMode: ignoreMode
+        )
+        let payload = try await ExchangeRateAPIClient().fetchLatestRates(
+            apiKey: resolved.apiKey,
+            baseCurrencyCode: resolved.baseCurrencyCode
+        )
+        let baseCode = payload.baseCode.uppercased()
+        var normalizedRates: [String: Decimal] = [:]
+        for (code, apiRate) in payload.conversionRates {
+            let upperCode = code.uppercased()
+            if upperCode == baseCode { continue }
+            if apiRate == .zero { continue }
+            // ExchangeRate-API returns: 1 base = X target.
+            // App converter expects: 1 target = X base.
+            normalizedRates[upperCode] = Decimal(1) / apiRate
+        }
+
+        let context = persistence.newBackgroundContext()
+        try await context.perform {
+            let settings = AppSettings.fetchSingleton(in: context) ?? AppSettings.makeDefault(in: context)
+            settings.baseCurrencyCode = resolved.baseCurrencyCode
+            settings.customExchangeRates = ExchangeRateStorage.encode(normalizedRates)
+            settings.exchangeRateApiKey = resolved.apiKey
+            settings.lastUpdated = payload.timeLastUpdateUTC ?? Date()
+            try context.save()
+        }
+
+        refresh()
+        return OfficialExchangeRateSyncResult(
+            baseCurrencyCode: resolved.baseCurrencyCode,
+            updatedAt: payload.timeLastUpdateUTC ?? Date(),
+            ratesCount: normalizedRates.count
+        )
     }
 
     func updateMarketDataAPIKeys(stock stockApiKey: String, crypto cryptoApiKey: String) {
@@ -172,18 +263,74 @@ final class AppSettingsStore: ObservableObject {
         let trimmed = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    private static func decodeRateTable(for mode: ExchangeMode, settings: AppSettings) -> [String: Decimal] {
+        switch mode {
+        case .official:
+            return ExchangeRateStorage.decode(settings.customExchangeRates)
+        case .manual:
+            return ExchangeRateStorage.decode(settings.manualExchangeRates)
+        }
+    }
+
+    private static func encodeRateTable(_ table: [String: Decimal], for mode: ExchangeMode, settings: AppSettings) {
+        let encoded = ExchangeRateStorage.encode(table)
+        switch mode {
+        case .official:
+            settings.customExchangeRates = encoded
+        case .manual:
+            settings.manualExchangeRates = encoded
+        }
+    }
+
+    private func resolveOfficialRateConfiguration(
+        apiKeyOverride: String?,
+        baseCurrencyOverride: String?,
+        ignoreMode: Bool
+    ) async throws -> OfficialRateConfiguration {
+        let context = persistence.container.viewContext
+        return try await context.perform {
+            let settings = AppSettings.fetchSingleton(in: context) ?? AppSettings.makeDefault(in: context)
+            let mode = ExchangeMode(storedValue: settings.exchangeMode)
+            guard ignoreMode || mode == .official else {
+                throw OfficialExchangeRateSyncError.modeNotOfficial
+            }
+            guard let apiKey = apiKeyOverride ?? Self.normalizedAPIKey(settings.exchangeRateApiKey) else {
+                throw OfficialExchangeRateSyncError.missingAPIKey
+            }
+            let baseCurrencyCode = baseCurrencyOverride ?? (settings.baseCurrencyCode ?? "USD").uppercased()
+            return OfficialRateConfiguration(baseCurrencyCode: baseCurrencyCode, apiKey: apiKey)
+        }
+    }
+
+    private func normalizedCurrencyCode(_ code: String?) -> String? {
+        let trimmed = code?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed.uppercased()
+    }
+
+    private struct OfficialRateConfiguration {
+        let baseCurrencyCode: String
+        let apiKey: String
+    }
 }
 
 private extension AppSettingsSnapshot {
     init(managedObject: AppSettings) {
         baseCurrencyCode = managedObject.baseCurrencyCode ?? "USD"
-        exchangeMode = ExchangeMode(rawValue: managedObject.exchangeMode ?? "official") ?? .official
+        let mode = ExchangeMode(storedValue: managedObject.exchangeMode)
+        exchangeMode = mode
         cloudSyncEnabled = managedObject.cloudSyncEnabled
         hasCompletedOnboarding = managedObject.hasCompletedOnboarding
         priceRefreshIntervalMinutes = Int(managedObject.priceRefreshIntervalMinutes)
         notificationsEnabled = managedObject.notificationsEnabled
         dashboardWidgets = DashboardWidgetStorage.decode(managedObject.dashboardWidgets)
-        exchangeRates = ExchangeRateStorage.decode(managedObject.customExchangeRates)
+        switch mode {
+        case .official:
+            exchangeRates = ExchangeRateStorage.decode(managedObject.customExchangeRates)
+        case .manual:
+            exchangeRates = ExchangeRateStorage.decode(managedObject.manualExchangeRates)
+        }
+        exchangeRateAPIKey = AppSettingsStore.normalizedAPIKey(managedObject.exchangeRateApiKey)
         stockApiKey = AppSettingsStore.normalizedAPIKey(managedObject.stockApiKey)
         cryptoApiKey = AppSettingsStore.normalizedAPIKey(managedObject.cryptoApiKey)
     }
