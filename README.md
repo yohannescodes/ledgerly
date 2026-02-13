@@ -1,6 +1,6 @@
 # ledgerly
 
-ledgerly is an offline-first SwiftUI personal finance app that keeps data on-device while providing wallets, transactions, budgets, goals, manual assets, liabilities, and investment tracking. Reports normalize to a base currency with manual exchange rates, and optional live price refresh for crypto and stocks. <br>
+ledgerly is an offline-first SwiftUI personal finance app that keeps data on-device while providing wallets, transactions, budgets, goals, manual assets, liabilities, and investment tracking. Reports normalize to a base currency with official or manual exchange rates, and optional live price refresh for crypto and stocks. <br>
 <a href="https://www.producthunt.com/products/github-224?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-ledgerly" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1041480&theme=dark&t=1764162628406" alt="ledgerly - a&#0032;net&#0045;worth&#0045;centered&#0032;expense&#0032;tracker&#0032;app | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
 ## Contributing
@@ -9,7 +9,7 @@ Read `CONTRIBUTING.md` for collaboration guidelines, coding standards, and the r
 ## Highlights
 - Offline-first Core Data storage with manual JSON backup and restore.
 - Customizable dashboard with reorderable widgets for net worth, financial health, expense mix, spending cadence, and income progress.
-- Multi-currency wallets with base-currency reporting and manual FX overrides.
+- Multi-currency wallets with base-currency reporting and official/manual FX support.
 - Fast transaction capture with transfers, categories, filters, and a detail editor built for quick edits.
 - Manual entries for assets, receivables, investments, and liabilities with wallet funding and profit tracking.
 - Budget alerts and goal reminders driven by system notifications.
@@ -45,7 +45,7 @@ ledgerly follows a layered SwiftUI architecture centered around Core Data and ob
 
 ### Offline Strategy
 - Everything is stored locally in Core Data; no network is required for core tracking flows.
-- FX rates are manual; when a rate is missing, amounts stay in their native currency.
+- FX rates can be synced from ExchangeRate-API (official mode) or entered manually; when a rate is missing, amounts stay in their native currency.
 - Live prices and ticker search are optional and only used when API keys are configured.
 - Backups are manual JSON exports through the system share sheet.
 
@@ -94,14 +94,14 @@ ledgerly follows a layered SwiftUI architecture centered around Core Data and ob
 - Price refresh pulls CoinGecko for crypto (optional API key) and Alpha Vantage for stocks (requires key).
 
 ### Settings & Utilities
-- Base currency, exchange mode, notifications, and manual FX rates in "Dashboard & Settings".
+- Base currency, exchange mode, notifications, and official/manual FX controls in "Dashboard & Settings".
 - Dashboard preferences for reordering or hiding widgets.
 - JSON backup export/import plus a net worth rebuild option (recalculates from Jan 2026 using current rates).
 
 ## Currency & Exchange Rates
 - The base currency drives dashboards, summaries, and net worth totals.
 - Each wallet keeps its own currency; conversions pass through the base currency via `CurrencyConverter`.
-- Exchange mode (official/parallel/manual) is stored as a preference; manual rates are editable per currency.
+- Exchange mode (official/manual) is stored as a preference; official rates can sync from ExchangeRate-API and manual rates stay editable per currency.
 - Missing rates fall back to the original amount rather than blocking calculations.
 - Transactions store both native amounts and base conversions for reproducible reports.
 
@@ -122,7 +122,7 @@ ledgerly follows a layered SwiftUI architecture centered around Core Data and ob
 ## Data Model Snapshot
 | Domain | Entities / Models | Notes |
 | --- | --- | --- |
-| Configuration | `AppSettings` | Base currency, exchange mode, notifications, dashboard order, manual FX rates. |
+| Configuration | `AppSettings` | Base currency, exchange mode, notifications, dashboard order, FX settings, API keys. |
 | Wallets & Categories | `Wallet`, `Category` | Wallet types, balances, icons, and income/expense categories. |
 | Transactions | `Transaction` | Unified ledger with transfers, base conversions, and notes. |
 | Budgets | `MonthlyBudget`, `BudgetAlert` | Monthly limits with notification thresholds. |

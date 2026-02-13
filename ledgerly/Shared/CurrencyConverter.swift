@@ -32,7 +32,13 @@ extension CurrencyConverter {
         context.performAndWait {
             if let settings = AppSettings.fetchSingleton(in: context) {
                 base = settings.baseCurrencyCode ?? base
-                rates = ExchangeRateStorage.decode(settings.customExchangeRates)
+                let mode = ExchangeMode(storedValue: settings.exchangeMode)
+                switch mode {
+                case .official:
+                    rates = ExchangeRateStorage.decode(settings.customExchangeRates)
+                case .manual:
+                    rates = ExchangeRateStorage.decode(settings.manualExchangeRates)
+                }
             }
         }
         return CurrencyConverter(baseCurrency: base, rates: rates)

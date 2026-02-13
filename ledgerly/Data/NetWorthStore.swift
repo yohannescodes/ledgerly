@@ -22,12 +22,23 @@ final class NetWorthStore: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.reload() }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(
+            for: .NSManagedObjectContextObjectsDidChange,
+            object: persistence.container.viewContext
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] notification in
+            guard Self.isAppSettingsChange(notification) else { return }
+            self?.reload()
+        }
+        .store(in: &cancellables)
     }
 
     func reload() {
         service.ensureDailySnapshot()
         liveTotals = service.computeTotals()
         let context = persistence.container.viewContext
+        let exchangeMode = ExchangeMode(storedValue: AppSettings.fetchSingleton(in: context)?.exchangeMode)
         let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \NetWorthSnapshot.timestamp, ascending: true)]
         do {
@@ -39,23 +50,26 @@ final class NetWorthStore: ObservableObject {
                 filteredResults = results
             }
             let models = filteredResults.map(NetWorthSnapshotModel.init)
-            snapshots = models
-            latestSnapshot = models.last
-        let baseCurrency = CurrencyConverter.fromSettings(in: context).baseCurrency
-        displaySnapshots = Self.makeDisplaySnapshots(
-            base: models,
-            liveTotals: liveTotals,
-            baseCurrency: baseCurrency
-        )
+            let modeSnapshots = Self.filterSnapshots(models, for: exchangeMode)
+            snapshots = modeSnapshots
+            latestSnapshot = modeSnapshots.last
+            let converter = CurrencyConverter.fromSettings(in: context)
+            displaySnapshots = Self.makeDisplaySnapshots(
+                base: modeSnapshots,
+                liveTotals: liveTotals,
+                baseCurrency: converter.baseCurrency,
+                exchangeModeUsed: exchangeMode.rawValue
+            )
         } catch {
             assertionFailure("Failed to load net worth snapshots: \(error)")
             snapshots = []
             latestSnapshot = nil
-            let baseCurrency = CurrencyConverter.fromSettings(in: context).baseCurrency
+            let converter = CurrencyConverter.fromSettings(in: context)
             displaySnapshots = Self.makeDisplaySnapshots(
                 base: [],
                 liveTotals: liveTotals,
-                baseCurrency: baseCurrency
+                baseCurrency: converter.baseCurrency,
+                exchangeModeUsed: exchangeMode.rawValue
             )
         }
     }
@@ -103,14 +117,16 @@ final class NetWorthStore: ObservableObject {
     private static func makeDisplaySnapshots(
         base: [NetWorthSnapshotModel],
         liveTotals: NetWorthTotals?,
-        baseCurrency: String
+        baseCurrency: String,
+        exchangeModeUsed: String
     ) -> [NetWorthSnapshotModel] {
         guard let totals = liveTotals else { return base }
         var combined = base
         let liveSnapshot = NetWorthSnapshotModel(
             timestamp: Date(),
             totals: totals,
-            currencyCode: baseCurrency
+            currencyCode: baseCurrency,
+            exchangeModeUsed: exchangeModeUsed
         )
         if let last = combined.last,
            Calendar.current.isDate(last.timestamp, equalTo: liveSnapshot.timestamp, toGranularity: .minute) {
@@ -118,5 +134,27 @@ final class NetWorthStore: ObservableObject {
         }
         combined.append(liveSnapshot)
         return combined
+    }
+
+    private static func filterSnapshots(_ snapshots: [NetWorthSnapshotModel], for mode: ExchangeMode) -> [NetWorthSnapshotModel] {
+        let modeValue = mode.rawValue
+        let tagged = snapshots.filter { $0.exchangeModeUsed?.lowercased() == modeValue }
+        if !tagged.isEmpty {
+            return tagged
+        }
+        // Backward compatibility for older data created before exchangeModeUsed existed.
+        return snapshots.filter { $0.exchangeModeUsed == nil }
+    }
+
+    private static func isAppSettingsChange(_ notification: Notification) -> Bool {
+        guard let userInfo = notification.userInfo else { return false }
+        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSRefreshedObjectsKey]
+        for key in keys {
+            guard let objects = userInfo[key] as? Set<NSManagedObject> else { continue }
+            if objects.contains(where: { $0 is AppSettings }) {
+                return true
+            }
+        }
+        return false
     }
 }

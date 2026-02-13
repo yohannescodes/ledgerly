@@ -89,6 +89,7 @@ final class PersistenceController {
         let service = NetWorthService(persistence: self)
         let totals = service.computeTotals()
         let converter = CurrencyConverter.fromSettings(in: context)
+        let exchangeMode = ExchangeMode(storedValue: AppSettings.fetchSingleton(in: context)?.exchangeMode)
         _ = NetWorthSnapshot.create(
             in: context,
             totalAssets: totals.totalAssets,
@@ -96,7 +97,8 @@ final class PersistenceController {
             coreNetWorth: totals.coreNetWorth,
             tangibleNetWorth: totals.tangibleNetWorth,
             volatileAssets: totals.volatileAssets,
-            currencyCode: converter.baseCurrency
+            currencyCode: converter.baseCurrency,
+            exchangeModeUsed: exchangeMode.rawValue
         )
     }
 

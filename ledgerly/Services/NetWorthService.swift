@@ -129,11 +129,13 @@ final class NetWorthService {
             guard targetDate >= snapshotStart else { return }
             let dayStart = calendar.startOfDay(for: targetDate)
             guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return }
+            let exchangeModeUsed = self.currentExchangeMode(in: context).rawValue
             let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
             request.predicate = NSPredicate(
-                format: "timestamp >= %@ AND timestamp < %@",
+                format: "timestamp >= %@ AND timestamp < %@ AND exchangeModeUsed == %@",
                 dayStart as NSDate,
-                nextDay as NSDate
+                nextDay as NSDate,
+                exchangeModeUsed
             )
             request.fetchLimit = 1
             let existing = try? context.fetch(request).first
@@ -152,7 +154,8 @@ final class NetWorthService {
                 coreNetWorth: totals.coreNetWorth,
                 tangibleNetWorth: totals.tangibleNetWorth,
                 volatileAssets: totals.volatileAssets,
-                currencyCode: converter.baseCurrency
+                currencyCode: converter.baseCurrency,
+                exchangeModeUsed: exchangeModeUsed
             )
             snapshot.timestamp = targetDate
             try? context.save()
@@ -339,7 +342,9 @@ final class NetWorthService {
     }
 
     private func rebuildDailySnapshots(in context: NSManagedObjectContext) throws -> Int {
+        let exchangeModeUsed = currentExchangeMode(in: context).rawValue
         let request: NSFetchRequest<NetWorthSnapshot> = NetWorthSnapshot.fetchRequest()
+        request.predicate = NSPredicate(format: "exchangeModeUsed == %@", exchangeModeUsed)
         let existing = try context.fetch(request)
         existing.forEach { context.delete($0) }
 
@@ -391,7 +396,8 @@ final class NetWorthService {
                 coreNetWorth: totals.coreNetWorth,
                 tangibleNetWorth: totals.tangibleNetWorth,
                 volatileAssets: totals.volatileAssets,
-                currencyCode: converter.baseCurrency
+                currencyCode: converter.baseCurrency,
+                exchangeModeUsed: exchangeModeUsed
             )
             snapshot.timestamp = snapshotDate
             created += 1
@@ -503,5 +509,9 @@ final class NetWorthService {
         return wallets.reduce(.zero) {
             $0 + converter.convertToBase($1.currentBalance as Decimal? ?? .zero, currency: $1.baseCurrencyCode)
         }
+    }
+
+    private func currentExchangeMode(in context: NSManagedObjectContext) -> ExchangeMode {
+        ExchangeMode(storedValue: AppSettings.fetchSingleton(in: context)?.exchangeMode)
     }
 }

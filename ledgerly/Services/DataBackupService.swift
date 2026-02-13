@@ -128,6 +128,7 @@ struct LedgerlyBackup: Codable {
         let identifier: String
         let timestamp: Date
         let currencyCode: String?
+        let exchangeModeUsed: String?
         let totalAssets: Decimal
         let totalLiabilities: Decimal
         let coreNetWorth: Decimal
@@ -369,6 +370,7 @@ final class DataBackupService {
                 identifier: $0.identifier ?? UUID().uuidString,
                 timestamp: $0.timestamp ?? Date(),
                 currencyCode: $0.currencyCode,
+                exchangeModeUsed: $0.exchangeModeUsed,
                 totalAssets: ($0.totalAssets as Decimal?) ?? .zero,
                 totalLiabilities: ($0.totalLiabilities as Decimal?) ?? .zero,
                 coreNetWorth: ($0.coreNetWorth as Decimal?) ?? .zero,
@@ -585,6 +587,7 @@ final class DataBackupService {
             snapshot.identifier = record.identifier
             snapshot.timestamp = record.timestamp
             snapshot.currencyCode = record.currencyCode
+            snapshot.exchangeModeUsed = record.exchangeModeUsed
             snapshot.totalAssets = NSDecimalNumber(decimal: record.totalAssets)
             snapshot.totalLiabilities = NSDecimalNumber(decimal: record.totalLiabilities)
             snapshot.coreNetWorth = NSDecimalNumber(decimal: record.coreNetWorth)

@@ -20,6 +20,26 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut, value: appSettingsStore.snapshot.hasCompletedOnboarding)
+        .task(id: officialRateSyncTrigger) {
+            await syncOfficialRatesIfNeeded()
+        }
+    }
+
+    private var officialRateSyncTrigger: String {
+        let snapshot = appSettingsStore.snapshot
+        return [
+            snapshot.exchangeMode.rawValue,
+            snapshot.baseCurrencyCode.uppercased(),
+            snapshot.exchangeRateAPIKey ?? ""
+        ].joined(separator: "|")
+    }
+
+    @MainActor
+    private func syncOfficialRatesIfNeeded() async {
+        let snapshot = appSettingsStore.snapshot
+        guard snapshot.exchangeMode == .official else { return }
+        guard snapshot.exchangeRateAPIKey != nil else { return }
+        _ = try? await appSettingsStore.syncOfficialExchangeRates()
     }
 }
 

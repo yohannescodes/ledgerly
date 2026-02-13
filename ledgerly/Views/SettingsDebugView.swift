@@ -21,6 +21,8 @@ struct SettingsDebugView: View {
     @State private var pendingRateValue: Decimal = 1
     @State private var isEditingRate = false
     @State private var showingNetWorthRebuild = false
+    @State private var exchangeRateAPIKeyInput = ""
+    @State private var isSyncingOfficialRates = false
     @State private var stockApiKeyInput = ""
     @State private var cryptoApiKeyInput = ""
 
@@ -86,30 +88,69 @@ struct SettingsDebugView: View {
             }
 
             Section("Exchange Rates") {
-                if rateEntries.isEmpty {
-                    Text("Add conversion rates to normalize multi-currency wallets.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(rateEntries, id: \.code) { entry in
-                    Button {
-                        presentRateEditor(code: entry.code, value: entry.value)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(entry.code)
-                                Text("1 \(entry.code) = \(formattedRate(entry.value)) \(appSettingsStore.snapshot.baseCurrencyCode)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                if appSettingsStore.snapshot.exchangeMode == .official {
+                    SecureField("ExchangeRate-API Key", text: $exchangeRateAPIKeyInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .privacySensitive()
+
+                    Button(action: saveAndSyncOfficialRates) {
+                        if isSyncingOfficialRates {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("Syncing Official Rates...")
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(Color.secondary)
+                        } else {
+                            Text("Save Key & Sync Official Rates")
                         }
                     }
-                    .buttonStyle(.plain)
-                }
-                Button(action: { presentRateEditor(code: nil, value: nil) }) {
-                    Label("Add Currency Rate", systemImage: "plus")
+                    .disabled(isSyncingOfficialRates || !hasUnsavedExchangeRateAPIKeyChanges)
+
+                    Button(action: refreshOfficialRates) {
+                        Text("Refresh Official Rates")
+                    }
+                    .disabled(isSyncingOfficialRates || !hasStoredExchangeRateAPIKey)
+
+                    if hasStoredExchangeRateAPIKey {
+                        Button(role: .destructive, action: clearExchangeRateAPIKey) {
+                            Text("Remove ExchangeRate-API Key")
+                        }
+                    }
+
+                    if rateEntries.isEmpty {
+                        Text("No official rates synced yet. Save your key to fetch rates.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Using \(rateEntries.count) synced official rates for base \(appSettingsStore.snapshot.baseCurrencyCode).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    if rateEntries.isEmpty {
+                        Text("Add conversion rates to normalize multi-currency wallets.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(rateEntries, id: \.code) { entry in
+                        Button {
+                            presentRateEditor(code: entry.code, value: entry.value)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(entry.code)
+                                    Text("1 \(entry.code) = \(formattedRate(entry.value)) \(appSettingsStore.snapshot.baseCurrencyCode)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(Color.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Button(action: { presentRateEditor(code: nil, value: nil) }) {
+                        Label("Add Currency Rate", systemImage: "plus")
+                    }
                 }
             }
 
@@ -160,7 +201,7 @@ struct SettingsDebugView: View {
                 } label: {
                     Label("Rebuild Net Worth Snapshots", systemImage: "arrow.clockwise")
                 }
-                Text("Deletes existing snapshots and rebuilds daily totals (5 PM local time) starting from today using transactions and manual assets. Uses current FX rates and valuations, so past days are approximate.")
+                Text("Deletes existing snapshots for the currently selected exchange mode and rebuilds daily totals (5 PM local time) starting from today using transactions and manual assets. Uses current FX rates and valuations, so past days are approximate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -192,14 +233,14 @@ struct SettingsDebugView: View {
             Button("Rebuild", role: .destructive, action: rebuildNetWorthHistory)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will delete your existing net worth snapshots and recreate daily totals from today. This cannot be undone.")
+            Text("This will delete net worth snapshots for the currently selected exchange mode and recreate daily totals from today. This cannot be undone.")
         }
         .alert("Data Management", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
             Button("OK", role: .cancel) { alertMessage = nil }
         } message: {
             Text(alertMessage ?? "")
         }
-        .onAppear(perform: syncMarketDataAPIKeyInputs)
+        .onAppear(perform: syncAPIKeyInputs)
     }
 
     private func exportBackup() {
@@ -255,6 +296,14 @@ struct SettingsDebugView: View {
             .map { ($0.key, $0.value) }
     }
 
+    private var hasStoredExchangeRateAPIKey: Bool {
+        appSettingsStore.snapshot.exchangeRateAPIKey != nil
+    }
+
+    private var hasUnsavedExchangeRateAPIKeyChanges: Bool {
+        normalizedApiKey(exchangeRateAPIKeyInput) != appSettingsStore.snapshot.exchangeRateAPIKey
+    }
+
     private var hasStoredMarketDataKey: Bool {
         appSettingsStore.snapshot.stockApiKey != nil || appSettingsStore.snapshot.cryptoApiKey != nil
     }
@@ -275,7 +324,8 @@ struct SettingsDebugView: View {
         netWorthStore.rebuildDailySnapshots { result in
             switch result {
             case .success(let count):
-                alertMessage = "Rebuilt \(count) daily snapshots."
+                let mode = appSettingsStore.snapshot.exchangeMode.title
+                alertMessage = "Rebuilt \(count) daily snapshots for \(mode) mode."
             case .failure:
                 alertMessage = "Failed to rebuild net worth snapshots."
             }
@@ -296,9 +346,49 @@ struct SettingsDebugView: View {
         alertMessage = "Market data API keys removed."
     }
 
-    private func syncMarketDataAPIKeyInputs() {
+    private func syncAPIKeyInputs() {
+        exchangeRateAPIKeyInput = appSettingsStore.snapshot.exchangeRateAPIKey ?? ""
         stockApiKeyInput = appSettingsStore.snapshot.stockApiKey ?? ""
         cryptoApiKeyInput = appSettingsStore.snapshot.cryptoApiKey ?? ""
+    }
+
+    private func saveAndSyncOfficialRates() {
+        Task { @MainActor in
+            await syncOfficialRates(usingInputKey: true)
+        }
+    }
+
+    private func refreshOfficialRates() {
+        Task { @MainActor in
+            await syncOfficialRates(usingInputKey: false)
+        }
+    }
+
+    private func clearExchangeRateAPIKey() {
+        exchangeRateAPIKeyInput = ""
+        appSettingsStore.clearExchangeRateAPIKey()
+        alertMessage = "ExchangeRate-API key removed."
+    }
+
+    @MainActor
+    private func syncOfficialRates(usingInputKey: Bool) async {
+        let keyOverride = usingInputKey ? normalizedApiKey(exchangeRateAPIKeyInput) : nil
+        if usingInputKey, keyOverride == nil {
+            appSettingsStore.clearExchangeRateAPIKey()
+            alertMessage = "ExchangeRate-API key removed."
+            return
+        }
+
+        isSyncingOfficialRates = true
+        defer { isSyncingOfficialRates = false }
+
+        do {
+            let result = try await appSettingsStore.syncOfficialExchangeRates(apiKeyOverride: keyOverride)
+            exchangeRateAPIKeyInput = appSettingsStore.snapshot.exchangeRateAPIKey ?? keyOverride ?? ""
+            alertMessage = "Synced \(result.ratesCount) official rates for \(result.baseCurrencyCode)."
+        } catch {
+            alertMessage = error.localizedDescription
+        }
     }
 
     private func formattedRate(_ value: Decimal) -> String {
