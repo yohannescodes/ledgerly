@@ -28,6 +28,8 @@ extension AppSettings {
         settings.priceRefreshIntervalMinutes = 30
         settings.lastUpdated = Date()
         settings.customExchangeRates = "{}"
+        settings.manualExchangeRates = "{}"
+        settings.exchangeRateApiKey = nil
         settings.dashboardWidgets = DashboardWidgetStorage.encode(DashboardWidget.defaultOrder)
         return settings
     }

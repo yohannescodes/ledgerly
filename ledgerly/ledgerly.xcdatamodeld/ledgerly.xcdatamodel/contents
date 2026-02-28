@@ -10,6 +10,8 @@
         <attribute name="lastUpdated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="priceRefreshIntervalMinutes" optional="NO" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
         <attribute name="customExchangeRates" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="manualExchangeRates" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="exchangeRateApiKey" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="dashboardWidgets" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="stockApiKey" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="cryptoApiKey" optional="YES" attributeType="String" usesScalarValueType="NO"/>
@@ -112,6 +114,7 @@
     <entity name="NetWorthSnapshot" representedClassName="NetWorthSnapshot" syncable="YES" codeGenerationType="class">
         <attribute name="identifier" optional="NO" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="currencyCode" optional="YES" attributeType="String" usesScalarValueType="NO"/>
+        <attribute name="exchangeModeUsed" optional="YES" attributeType="String" usesScalarValueType="NO"/>
         <attribute name="timestamp" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="totalAssets" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>
         <attribute name="totalLiabilities" optional="NO" attributeType="Decimal" usesScalarValueType="NO"/>

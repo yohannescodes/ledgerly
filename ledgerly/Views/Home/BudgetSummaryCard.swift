@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BudgetSummaryCard: View {
     @EnvironmentObject private var budgetsStore: BudgetsStore
+    @EnvironmentObject private var appSettingsStore: AppSettingsStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -20,6 +21,9 @@ struct BudgetSummaryCard: View {
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
         .onAppear { budgetsStore.reload() }
+        .onChange(of: appSettingsStore.snapshot) { _ in
+            budgetsStore.reload()
+        }
     }
 
     private func progress(for budget: MonthlyBudgetModel) -> Double {

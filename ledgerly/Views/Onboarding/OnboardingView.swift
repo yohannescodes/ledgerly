@@ -7,11 +7,14 @@ struct OnboardingView: View {
     @State private var currentStep: OnboardingStep = .welcome
     @State private var selectedCurrency: String
     @State private var selectedExchangeMode: ExchangeMode
+    @State private var exchangeRateAPIKey: String
     @State private var isSaving = false
+    @State private var syncErrorMessage: String?
 
     init(initialSnapshot: AppSettingsSnapshot) {
         _selectedCurrency = State(initialValue: initialSnapshot.baseCurrencyCode)
         _selectedExchangeMode = State(initialValue: initialSnapshot.exchangeMode)
+        _exchangeRateAPIKey = State(initialValue: initialSnapshot.exchangeRateAPIKey ?? "")
     }
 
     var body: some View {
@@ -20,7 +23,8 @@ struct OnboardingView: View {
             StepContent(
                 step: currentStep,
                 selectedCurrency: $selectedCurrency,
-                selectedExchangeMode: $selectedExchangeMode
+                selectedExchangeMode: $selectedExchangeMode,
+                exchangeRateAPIKey: $exchangeRateAPIKey
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -46,14 +50,24 @@ struct OnboardingView: View {
         }
         .padding(24)
         .animation(.easeInOut, value: currentStep)
+        .alert("Setup Note", isPresented: Binding(
+            get: { syncErrorMessage != nil },
+            set: { if !$0 { syncErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { syncErrorMessage = nil }
+        } message: {
+            Text(syncErrorMessage ?? "")
+        }
     }
 
     private var canContinue: Bool {
         switch currentStep {
-        case .welcome, .exchangeMode, .summary:
+        case .welcome, .summary:
             return true
         case .currency:
             return !selectedCurrency.trimmingCharacters(in: .whitespaces).isEmpty
+        case .exchangeMode:
+            return selectedExchangeMode != .official || normalizedAPIKey(exchangeRateAPIKey) != nil
         }
     }
 
@@ -74,12 +88,33 @@ struct OnboardingView: View {
 
     private func completeOnboarding() {
         isSaving = true
-        appSettingsStore.updateBaseCurrency(code: selectedCurrency)
-        appSettingsStore.updateExchangeMode(selectedExchangeMode)
-        appSettingsStore.markOnboardingComplete()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        Task { @MainActor in
+            appSettingsStore.updateExchangeMode(selectedExchangeMode)
+            appSettingsStore.updateExchangeRateAPIKey(exchangeRateAPIKey)
+
+            if selectedExchangeMode == .official {
+                do {
+                    _ = try await appSettingsStore.syncOfficialExchangeRates(
+                        apiKeyOverride: exchangeRateAPIKey,
+                        baseCurrencyOverride: selectedCurrency,
+                        ignoreMode: true
+                    )
+                } catch {
+                    appSettingsStore.updateBaseCurrency(code: selectedCurrency)
+                    syncErrorMessage = error.localizedDescription
+                }
+            } else {
+                appSettingsStore.updateBaseCurrency(code: selectedCurrency)
+            }
+
+            appSettingsStore.markOnboardingComplete()
             isSaving = false
         }
+    }
+
+    private func normalizedAPIKey(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -108,6 +143,7 @@ private struct StepContent: View {
 
     @Binding var selectedCurrency: String
     @Binding var selectedExchangeMode: ExchangeMode
+    @Binding var exchangeRateAPIKey: String
 
     var body: some View {
         switch step {
@@ -119,7 +155,10 @@ private struct StepContent: View {
                 infoText: "Choose a base currency for reports. Wallets can still hold any currency."
             )
         case .exchangeMode:
-            ExchangeModeStepView(selectedMode: $selectedExchangeMode)
+            ExchangeModeStepView(
+                selectedMode: $selectedExchangeMode,
+                exchangeRateAPIKey: $exchangeRateAPIKey
+            )
         case .summary:
             SummaryStepView(
                 currency: selectedCurrency,
@@ -143,16 +182,31 @@ private struct WelcomeStepView: View {
 
 private struct ExchangeModeStepView: View {
     @Binding var selectedMode: ExchangeMode
+    @Binding var exchangeRateAPIKey: String
     private let modes = ExchangeMode.allCases
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Pick how exchange rates behave globally. Override per wallet later.")
+            Text("Pick how exchange rates behave globally.")
                 .foregroundStyle(.secondary)
             ForEach(modes, id: \.self) { mode in
                 ExchangeModeCard(mode: mode, isSelected: selectedMode == mode) {
                     selectedMode = mode
                 }
+            }
+            if selectedMode == .official {
+                VStack(alignment: .leading, spacing: 8) {
+                    SecureField("ExchangeRate-API Key", text: $exchangeRateAPIKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .privacySensitive()
+                        .textFieldStyle(.roundedBorder)
+                    Text("Official mode requires your ExchangeRate-API key to sync live rates.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
     }
@@ -223,7 +277,7 @@ private enum OnboardingStep: Int, CaseIterable {
         switch self {
         case .welcome: return "Offline-first, privacy-respecting finance."
         case .currency: return "We normalize dashboards using this currency."
-        case .exchangeMode: return "Official, parallel, or manual rates—your choice."
+        case .exchangeMode: return "Choose Official (API-powered) or Manual rates."
         case .summary: return "Confirm and start tracking."
         }
     }
@@ -272,6 +326,7 @@ private struct SummaryRow: View {
             notificationsEnabled: true,
             dashboardWidgets: DashboardWidget.defaultOrder,
             exchangeRates: [:],
+            exchangeRateAPIKey: nil,
             stockApiKey: nil,
             cryptoApiKey: nil
         )

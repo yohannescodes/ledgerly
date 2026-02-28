@@ -4,6 +4,7 @@ import Charts
 struct NetWorthHistoryCard: View {
     let totals: NetWorthTotals?
     let baseCurrencyCode: String
+    let currentExchangeMode: String
     let snapshots: [NetWorthSnapshotModel]
     let converter: CurrencyConverter
     @State private var chartAnimationProgress: CGFloat = 0
@@ -79,6 +80,7 @@ struct NetWorthHistoryCard: View {
 
     private var netWorthChange: NetWorthChange? {
         guard let totals, let previousSnapshot = comparisonSnapshot else { return nil }
+        guard isComparableSnapshot(previousSnapshot) else { return nil }
         let current = totals.netWorth
         guard let previous = convertedNetWorth(for: previousSnapshot) else { return nil }
         let delta = current - previous
@@ -120,7 +122,16 @@ struct NetWorthHistoryCard: View {
         }
         let dayStart = calendar.startOfDay(for: targetDate)
         guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
-        return snapshots.last(where: { $0.timestamp >= dayStart && $0.timestamp < nextDay })
+        return snapshots.last(where: { snapshot in
+            snapshot.timestamp >= dayStart &&
+            snapshot.timestamp < nextDay &&
+            isComparableSnapshot(snapshot)
+        })
+    }
+
+    private func isComparableSnapshot(_ snapshot: NetWorthSnapshotModel) -> Bool {
+        guard let snapshotMode = snapshot.exchangeModeUsed else { return true }
+        return snapshotMode == currentExchangeMode
     }
 
     private func signedCurrency(_ value: Decimal, code: String) -> String {

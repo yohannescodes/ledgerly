@@ -100,6 +100,7 @@ struct HomeOverviewView: View {
             NetWorthHistoryCard(
                 totals: netWorthStore.liveTotals,
                 baseCurrencyCode: appSettingsStore.snapshot.baseCurrencyCode,
+                currentExchangeMode: appSettingsStore.snapshot.exchangeMode.rawValue,
                 snapshots: netWorthStore.snapshots,
                 converter: CurrencyConverter(
                     baseCurrency: appSettingsStore.snapshot.baseCurrencyCode,
@@ -239,6 +240,7 @@ struct ExpenseBreakdownCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .onAppear(perform: reload)
         .onChange(of: range) { _ in reload() }
+        .onChange(of: appSettingsStore.snapshot) { _ in reload() }
         .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
             reload()
         }
@@ -449,6 +451,9 @@ struct IncomeProgressCard: View {
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .onAppear(perform: reload)
+        .onChange(of: appSettingsStore.snapshot) { _ in
+            reload()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .transactionsDidChange)) { _ in
             reload()
         }
