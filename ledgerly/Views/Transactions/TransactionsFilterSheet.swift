@@ -38,6 +38,29 @@ struct TransactionsFilterSheet: View {
                     }
                 }
 
+                Section("Category") {
+                    if workingFilter.segment == .transfers {
+                        Text("Category filtering is unavailable for transfers.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        SingleSelectCategoryPicker(
+                            segment: workingFilter.segment,
+                            selection: Binding(
+                                get: { workingFilter.categoryIDs.first },
+                                set: { newValue in
+                                    if let newValue {
+                                        workingFilter.categoryIDs = [newValue]
+                                    } else {
+                                        workingFilter.categoryIDs.removeAll()
+                                    }
+                                }
+                            )
+                        )
+                    }
+                }
+                .disabled(workingFilter.segment == .transfers)
+
                 Section("Dates") {
                     Toggle("Filter by start date", isOn: $useStartDate)
                     if useStartDate {
@@ -77,3 +100,33 @@ struct TransactionsFilterSheet: View {
         }
     }
 }
+
+private struct SingleSelectCategoryPicker: View {
+    @FetchRequest(fetchRequest: Category.fetchRequestAll()) private var fetched: FetchedResults<Category>
+    let segment: TransactionFilter.Segment
+    @Binding var selection: NSManagedObjectID?
+
+    var body: some View {
+        Picker("Category", selection: $selection) {
+            Text("All Categories").tag(Optional<NSManagedObjectID>(nil))
+            ForEach(filteredCategories, id: \.objectID) { category in
+                Text(category.name ?? "Category")
+                    .tag(Optional(category.objectID))
+            }
+        }
+    }
+
+    private var filteredCategories: [Category] {
+        switch segment {
+        case .expenses:
+            return fetched.filter { ($0.type ?? "expense").lowercased() == "expense" }
+        case .income:
+            return fetched.filter { ($0.type ?? "income").lowercased() == "income" }
+        case .all:
+            return Array(fetched)
+        case .transfers:
+            return []
+        }
+    }
+}
+
