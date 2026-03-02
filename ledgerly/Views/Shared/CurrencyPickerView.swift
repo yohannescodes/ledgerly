@@ -6,6 +6,7 @@ struct CurrencyPickerView: View {
     var showSuggestions: Bool = true
     var suggestions: [CurrencyOption] = CurrencyDataSource.suggested
     var options: [CurrencyOption] = CurrencyDataSource.all
+    var excludedCodes: Set<String> = []
     var onSelect: ((String) -> Void)? = nil
 
     @State private var searchText: String = ""
@@ -17,17 +18,18 @@ struct CurrencyPickerView: View {
                     Text(infoText)
                         .foregroundStyle(.secondary)
                 }
-                TextField("Search currency", text: $searchText)
+                TextField("Type code or currency name", text: $searchText)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled(true)
                     .textFieldStyle(.roundedBorder)
 
-                if showSuggestions && !suggestions.isEmpty {
+                if showSuggestions && !featuredOptions.isEmpty {
                     Text("Popular choices")
                         .font(.subheadline.bold())
                     LazyVGrid(columns: gridColumns, spacing: 12) {
-                        ForEach(suggestions, id: \.code) { option in
+                        ForEach(featuredOptions, id: \.code) { option in
                             Button(action: {
-                                selectedCode = option.code
-                                onSelect?(option.code)
+                                select(code: option.code)
                             }) {
                                 VStack(spacing: 4) {
                                     Text(option.code)
@@ -38,7 +40,7 @@ struct CurrencyPickerView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(selectedCode == option.code ? Color.accentColor.opacity(0.15) : Color(.systemGray6))
+                                .background(selectedCode.uppercased() == option.code.uppercased() ? Color.accentColor.opacity(0.15) : Color(.systemGray6))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
@@ -46,62 +48,90 @@ struct CurrencyPickerView: View {
                     }
                 }
 
-                if hasSearchQuery {
-                    if filteredOptions.isEmpty {
-                        Text("No currencies match your search.")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(hasSearchQuery ? "Matches" : "Browse currencies")
+                        .font(.subheadline.bold())
+                    if displayedOptions.isEmpty {
+                        Text(hasSearchQuery ? "No currencies match your search." : "No currencies available.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(filteredOptions, id: \.code) { option in
-                                Button(action: {
-                                    selectedCode = option.code
-                                    onSelect?(option.code)
-                                }) {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(option.name)
-                                            Text(option.code)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        if selectedCode == option.code {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(Color.accentColor)
-                                        }
+                        ForEach(displayedOptions, id: \.code) { option in
+                            Button(action: {
+                                select(code: option.code)
+                            }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(option.code)
+                                            .font(.body.weight(.semibold))
+                                        Text(option.name)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
-                                    .padding(.vertical, 8)
+                                    Spacer()
+                                    if selectedCode.uppercased() == option.code.uppercased() {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                Divider()
+                                .padding(.vertical, 8)
                             }
+                            .buttonStyle(.plain)
+                            Divider()
                         }
                     }
-                } else {
-                    Text("Search for a code or currency name to view every option.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
+            .padding(.horizontal, 16)
             .padding(.vertical)
         }
     }
 
-    private var filteredOptions: [CurrencyOption] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return [] }
-        return options.filter { option in
-            option.code.localizedCaseInsensitiveContains(trimmed) ||
-            option.name.localizedCaseInsensitiveContains(trimmed)
-        }
+    private var displayedOptions: [CurrencyOption] {
+        let filtered = CurrencyDataSource.filteredOptions(
+            query: searchText,
+            options: options,
+            excluding: excludedCodes
+        )
+        return Array(filtered.prefix(40))
     }
 
     private var hasSearchQuery: Bool {
-        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var gridColumns: [GridItem] {
         [GridItem(.adaptive(minimum: 90), spacing: 12)]
+    }
+
+    private var featuredOptions: [CurrencyOption] {
+        guard !hasSearchQuery else { return [] }
+        let optionsByCode = Dictionary(uniqueKeysWithValues: options.map { ($0.code.uppercased(), $0) })
+        var merged: [CurrencyOption] = []
+        if let selectedOption = optionsByCode[selectedCode.uppercased()] {
+            merged.append(selectedOption)
+        }
+        merged.append(contentsOf: suggestions)
+        return uniqueByCode(merged)
+            .filter { !excludedCodes.contains($0.code.uppercased()) }
+            .prefix(8)
+            .map { $0 }
+    }
+
+    private func uniqueByCode(_ options: [CurrencyOption]) -> [CurrencyOption] {
+        var seen: Set<String> = []
+        var result: [CurrencyOption] = []
+        for option in options {
+            let code = option.code.uppercased()
+            if seen.insert(code).inserted {
+                result.append(option)
+            }
+        }
+        return result
+    }
+
+    private func select(code: String) {
+        selectedCode = code.uppercased()
+        onSelect?(code.uppercased())
     }
 }

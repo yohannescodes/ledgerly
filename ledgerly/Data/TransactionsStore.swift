@@ -33,6 +33,7 @@ struct TransactionFilter {
 
     var segment: Segment = .all
     var walletID: NSManagedObjectID?
+    var categoryIDs: Set<NSManagedObjectID> = []
     var startDate: Date?
     var endDate: Date?
     var searchText: String = ""
@@ -574,6 +575,14 @@ final class TransactionsStore: ObservableObject {
            let wallet = try? context.existingObject(with: walletID) {
             predicates.append(NSPredicate(format: "wallet == %@", wallet))
         }
+        if filter.segment != .transfers, !filter.categoryIDs.isEmpty {
+            let categories: [Category] = filter.categoryIDs.compactMap { id in
+                return try? context.existingObject(with: id) as? Category
+            }
+            if !categories.isEmpty {
+                predicates.append(NSPredicate(format: "category IN %@", categories))
+            }
+        }
         if let start = filter.startDate {
             predicates.append(NSPredicate(format: "date >= %@", start as NSDate))
         }
@@ -681,3 +690,4 @@ final class TransactionsStore: ObservableObject {
         }
     }
 }
+

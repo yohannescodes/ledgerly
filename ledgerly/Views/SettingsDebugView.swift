@@ -49,10 +49,18 @@ struct SettingsDebugView: View {
     var body: some View {
         Form {
             Section(header: Text("Profile"), footer: Text("Future versions will let you edit onboarding settings here.")) {
-                Picker("Base Currency", selection: baseCurrencyBinding) {
-                    ForEach(CurrencyDataSource.all, id: \.code) { option in
-                        Text("\(option.name) (\(option.code))")
-                            .tag(option.code)
+                NavigationLink {
+                    CurrencyPickerView(
+                        selectedCode: baseCurrencyBinding,
+                        infoText: "Base currency is used for reports and converted totals."
+                    )
+                    .navigationTitle("Base Currency")
+                } label: {
+                    HStack {
+                        Text("Base Currency")
+                        Spacer()
+                        Text(baseCurrencyDisplay)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -241,6 +249,14 @@ struct SettingsDebugView: View {
             Text(alertMessage ?? "")
         }
         .onAppear(perform: syncAPIKeyInputs)
+    }
+
+    private var baseCurrencyDisplay: String {
+        let code = appSettingsStore.snapshot.baseCurrencyCode.uppercased()
+        if let option = CurrencyDataSource.all.first(where: { $0.code.uppercased() == code }) {
+            return "\(option.code) • \(option.name)"
+        }
+        return code
     }
 
     private func exportBackup() {
